@@ -2,8 +2,6 @@
 
 This project is a high-performance, **brute-force** C++ baseline for k-Nearest Neighbor (k-NN) search. It finds the *exact* nearest neighbors for a set of query vectors from a base set by computing all pairwise Euclidean distances.
 
-This code is highly optimized and serves as a strong CPU baseline for performance metrics. It is not an *approximate* (ANN) algorithm.
-
 ---
 
 ## Key Optimizations
