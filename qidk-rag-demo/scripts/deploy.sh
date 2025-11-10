@@ -26,8 +26,7 @@ OPTIONAL_LIBS=(
     "libQnnHtpV75Stub.so"
     "libQnnHtpV79Stub.so"
 )
-ADSP_LIBS_DIR=$QNN_SDK_ROOT/lib/aarch64-android
-ADSP_LIBS=("libQnnHtpV73Skel.so" "libQnnHtpV75Skel.so" "libQnnHtpV79Skel.so")
+# Note: ADSP_LIBS are defined in the corrected Step 6
 
 # Remote paths
 REMOTE_DIR=/data/local/tmp/qnn-rag-demo
@@ -79,14 +78,26 @@ for lib in "${OPTIONAL_LIBS[@]}"; do
 done
 
 # Step 6: Push DSP skeleton libs
+echo "Searching for NPU/Skel libs..."
 SKEL_PUSHED=false
-for lib in "${ADSP_LIBS[@]}"; do
-    if [ -f "$ADSP_LIBS_DIR/$lib" ]; then
-        adb push "$ADSP_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
-        SKEL_PUSHED=true
-    fi
+# *** FIXED: The paths in this array are now correct ***
+HEXAGON_DIRS=(
+    "$QNN_SDK_ROOT/lib/hexagon-v73/unsigned"
+    "$QNN_SDK_ROOT/lib/hexagon-v75/unsigned"
+    "$QNN_SDK_ROOT/lib/hexagon-v79/unsigned"
+)
+ADSP_LIBS=("libQnnHtpV73Skel.so" "libQnnHtpV75Skel.so" "libQnnHtpV79Skel.so")
+
+for dir in "${HEXAGON_DIRS[@]}"; do
+    for lib in "${ADSP_LIBS[@]}"; do
+        if [ -f "$dir/$lib" ]; then
+            adb push "$dir/$lib" $REMOTE_DIR/ >/dev/null
+            echo "✓ Pushed $lib"
+            SKEL_PUSHED=true
+        fi
+    done
 done
-[ "$SKEL_PUSHED" = false ] && echo "⚠️  No skeleton library found. Falling back to CPU."
+[ "$SKEL_PUSHED" = false ] && echo "⚠️  No skeleton library found. NPU may fail."
 
 # Step 7: Run inference
 echo "--- Running on device ---"
