@@ -8,10 +8,11 @@ USE_FULL_DATASET=false
 
 # Local paths
 HOST_EXE=./android/output/qidk_rag_demo
+MODEL_BIN=./qnn/qnn_artifacts/model.bin
 if [ "$USE_FULL_DATASET" = true ]; then
-    MODEL_BIN=./android/app/src/main/assets/vector_search_1M.bin
+    DATA_BIN=./android/app/src/main/assets/vector_search_1M.bin
 else
-    MODEL_BIN=./android/app/src/main/assets/vector_search_10k.bin
+    DATA_BIN=./android/app/src/main/assets/vector_search_10k.bin
 fi
 QUERY_FILE=./data/siftsmall_query.fvecs
 
@@ -19,7 +20,7 @@ QUERY_FILE=./data/siftsmall_query.fvecs
 QNN_LIBS_DIR=$QNN_SDK_ROOT/lib/aarch64-android
 BUILT_LIBS_DIR=./android/app/main/libs/arm64-v8a
 
-QNN_LIBS=("libQnnHtp.so" "libQnnSystem.so" "libc++_shared.so")
+QNN_LIBS=("libQnnHtp.so" "libQnnHtpPrepare.so" "libQnnSystem.so" "libc++_shared.so")
 OPTIONAL_LIBS=(
     "libQnnHtpNetRunExtensions.so"
     "libQnnHtpV73Stub.so"
@@ -31,7 +32,8 @@ OPTIONAL_LIBS=(
 # Remote paths
 REMOTE_DIR=/data/local/tmp/qnn-rag-demo
 REMOTE_EXE=$REMOTE_DIR/qidk_rag_demo
-REMOTE_MODEL=$REMOTE_DIR/$(basename $MODEL_BIN)
+REMOTE_MODEL_BIN=$REMOTE_DIR/model.bin
+REMOTE_DATA=$REMOTE_DIR/$(basename $DATA_BIN)
 REMOTE_QUERY=$REMOTE_DIR/query.fvecs
 REMOTE_RESULTS=$REMOTE_DIR/results.txt
 
@@ -45,7 +47,7 @@ fi
 echo "✓ Device connected"
 
 # Validate files
-for f in "$HOST_EXE" "$MODEL_BIN" "$QUERY_FILE"; do
+for f in "$HOST_EXE" "$MODEL_BIN" "$DATA_BIN" "$QUERY_FILE"; do
     [ ! -f "$f" ] && echo "ERROR: Missing $f" && exit 1
 done
 
@@ -59,14 +61,17 @@ adb shell "chmod +x $REMOTE_EXE"
 echo "✓ Executable pushed"
 
 # Step 3: Push model + data
-adb push $MODEL_BIN $REMOTE_MODEL >/dev/null
+adb push $MODEL_BIN $REMOTE_MODEL_BIN >/dev/null
+adb push $DATA_BIN $REMOTE_DATA >/dev/null
 adb push $QUERY_FILE $REMOTE_QUERY >/dev/null
-echo "✓ Model and query data pushed"
+echo "✓ Model binary and query data pushed"
 
 # Step 4: Push core QNN libs
 for lib in "${QNN_LIBS[@]}"; do
     if [ -f "$BUILT_LIBS_DIR/$lib" ]; then
         adb push "$BUILT_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
+    elif [ -f "$QNN_LIBS_DIR/$lib" ]; then
+        adb push "$QNN_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
     else
         echo "⚠️  Missing $lib"
     fi
@@ -99,12 +104,27 @@ for dir in "${HEXAGON_DIRS[@]}"; do
 done
 [ "$SKEL_PUSHED" = false ] && echo "⚠️  No skeleton library found. NPU may fail."
 
-# Step 7: Run inference
+# Step 7: Generate context binary on device (with HtpPrepare lib)
+echo "--- Generating context binary on device ---"
+adb shell "cd $REMOTE_DIR && \
+    rm -rf output model_context.bin && \
+    export LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH && \
+    export ADSP_LIBRARY_PATH=. && \
+    ./qnn-context-binary-generator --model libmodel.so --backend libQnnHtp.so --binary_file model_context && \
+    cp output/model_context.bin model_context.bin 2>/dev/null || true"
+
+if adb shell "[ -f $REMOTE_DIR/model_context.bin ] && echo exists" | grep -q exists; then
+    echo "✓ Context binary generated"
+else
+    echo "⚠️  Context binary generation may have failed"
+fi
+
+# Step 8: Run inference
 echo "--- Running on device ---"
 adb shell "cd $REMOTE_DIR && \
-           export LD_LIBRARY_PATH=$REMOTE_DIR:\$LD_LIBRARY_PATH && \
-           export ADSP_LIBRARY_PATH=$REMOTE_DIR:\$ADSP_LIBRARY_PATH && \
-           $REMOTE_EXE $REMOTE_MODEL $REMOTE_QUERY $REMOTE_RESULTS libQnnHtp.so"
+           export LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH && \
+           export ADSP_LIBRARY_PATH=. && \
+           ./qidk_rag_demo model_context.bin query.fvecs results.txt libQnnHtp.so"
 RESULT=$?
 
 # Step 8: Results

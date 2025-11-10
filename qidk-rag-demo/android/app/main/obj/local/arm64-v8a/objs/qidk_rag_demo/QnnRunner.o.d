@@ -50,26 +50,26 @@
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/vector \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/__bit_reference \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/__split_buffer \
-  /root/qualcomm/qnn/include/QNN/QnnTypes.h \
+  /root/qualcomm/qnn/include/QNN/QnnInterface.h \
   /root/qualcomm/qnn/include/QNN/QnnCommon.h \
+  /root/qualcomm/qnn/include/QNN/QnnTypes.h \
   /root/qualcomm/qnn/include/QNN/QnnBackend.h \
   /root/qualcomm/qnn/include/QNN/QnnContext.h \
-  /root/qualcomm/qnn/include/QNN/QnnGraph.h \
-  /root/qualcomm/qnn/include/QNN/QnnTensor.h \
-  /root/qualcomm/qnn/include/QNN/System/QnnSystemInterface.h \
-  /root/qualcomm/qnn/include/QNN/System/QnnSystemCommon.h \
-  /root/qualcomm/qnn/include/QNN/System/QnnSystemContext.h \
   /root/qualcomm/qnn/include/QNN/QnnDevice.h \
-  /root/qualcomm/qnn/include/QNN/QnnInterface.h \
   /root/qualcomm/qnn/include/QNN/QnnError.h \
+  /root/qualcomm/qnn/include/QNN/QnnGraph.h \
   /root/qualcomm/qnn/include/QNN/QnnLog.h \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/cstdarg \
   /root/qualcomm/qnn/include/QNN/QnnMem.h \
   /root/qualcomm/qnn/include/QNN/QnnProfile.h \
   /root/qualcomm/qnn/include/QNN/QnnProperty.h \
   /root/qualcomm/qnn/include/QNN/QnnSignal.h \
+  /root/qualcomm/qnn/include/QNN/QnnTensor.h \
   /root/qualcomm/qnn/include/QNN/QnnOpDef.h \
   /root/qualcomm/qnn/include/QNN/QnnOpPackage.h \
+  /root/qualcomm/qnn/include/QNN/System/QnnSystemInterface.h \
+  /root/qualcomm/qnn/include/QNN/System/QnnSystemCommon.h \
+  /root/qualcomm/qnn/include/QNN/System/QnnSystemContext.h \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/iostream \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/ios \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/__locale \
@@ -90,7 +90,9 @@
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/filesystem \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/stack \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/deque \
-  /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/iomanip
+  /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/iomanip \
+  /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/cmath \
+  /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/math.h
 
 /root/qidk-rag-demo/android/app/main/jni/QnnRunner.h:
 
@@ -192,29 +194,21 @@
 
 /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/__split_buffer:
 
-/root/qualcomm/qnn/include/QNN/QnnTypes.h:
+/root/qualcomm/qnn/include/QNN/QnnInterface.h:
 
 /root/qualcomm/qnn/include/QNN/QnnCommon.h:
+
+/root/qualcomm/qnn/include/QNN/QnnTypes.h:
 
 /root/qualcomm/qnn/include/QNN/QnnBackend.h:
 
 /root/qualcomm/qnn/include/QNN/QnnContext.h:
 
-/root/qualcomm/qnn/include/QNN/QnnGraph.h:
-
-/root/qualcomm/qnn/include/QNN/QnnTensor.h:
-
-/root/qualcomm/qnn/include/QNN/System/QnnSystemInterface.h:
-
-/root/qualcomm/qnn/include/QNN/System/QnnSystemCommon.h:
-
-/root/qualcomm/qnn/include/QNN/System/QnnSystemContext.h:
-
 /root/qualcomm/qnn/include/QNN/QnnDevice.h:
 
-/root/qualcomm/qnn/include/QNN/QnnInterface.h:
-
 /root/qualcomm/qnn/include/QNN/QnnError.h:
+
+/root/qualcomm/qnn/include/QNN/QnnGraph.h:
 
 /root/qualcomm/qnn/include/QNN/QnnLog.h:
 
@@ -228,9 +222,17 @@
 
 /root/qualcomm/qnn/include/QNN/QnnSignal.h:
 
+/root/qualcomm/qnn/include/QNN/QnnTensor.h:
+
 /root/qualcomm/qnn/include/QNN/QnnOpDef.h:
 
 /root/qualcomm/qnn/include/QNN/QnnOpPackage.h:
+
+/root/qualcomm/qnn/include/QNN/System/QnnSystemInterface.h:
+
+/root/qualcomm/qnn/include/QNN/System/QnnSystemCommon.h:
+
+/root/qualcomm/qnn/include/QNN/System/QnnSystemContext.h:
 
 /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/iostream:
 
@@ -273,3 +275,7 @@
 /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/deque:
 
 /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/iomanip:
+
+/root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/cmath:
+
+/root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/math.h:

@@ -7,13 +7,18 @@ QUERY_DATA_FILE=data/siftsmall_query.fvecs
 FINAL_OUTPUT_BIN=android/app/src/main/assets/vector_search_10k.bin
 # --- End Configuration ---
 
+# Resolve absolute project root (so script works from anywhere)
+PROJECT_ROOT=$(realpath "$(dirname "$0")/..")
+cd "$PROJECT_ROOT"
+
 # Ensure QNN SDK path is set
 if [ -z "$QNN_SDK_ROOT" ]; then
     echo "ERROR: QNN_SDK_ROOT is not set."
     echo "Please set it (e.g., export QNN_SDK_ROOT=~/qualcomm/qnn)"
     exit 1
 fi
-# Ensure NDK path is set (needed by the lib generator)
+
+# Ensure NDK path is set
 if [ -z "$ANDROID_NDK_ROOT" ]; then
     echo "ERROR: ANDROID_NDK_ROOT is not set."
     echo "Please set it (e.g., export ANDROID_NDK_ROOT=~/Android/Sdk/ndk/25.2.9519653)"
@@ -23,8 +28,9 @@ fi
 # Source QNN environment
 source "$QNN_SDK_ROOT/bin/envsetup.sh"
 
-# Add NDK to the PATH for qnn-model-lib-generator
-export PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+# Add NDK to PATH for qnn-model-lib-generator
+# Need both the NDK root (for ndk-build) and the toolchain
+export PATH=$ANDROID_NDK_ROOT:$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 
 # Prepare directories
 ARTIFACTS_DIR=./qnn/qnn_artifacts
@@ -58,6 +64,7 @@ def read_fvecs(filename, count=-1):
     return np.array(vectors, dtype='float32')
 
 queries = read_fvecs(QUERY_FILE)
+os.makedirs(RAW_DIR, exist_ok=True)
 with open(LIST_FILE, 'w') as f:
     for i, q in enumerate(queries):
         path = f"{RAW_DIR}/query_{i}.raw"
@@ -78,40 +85,38 @@ qnn-onnx-converter \
 echo "--- Renaming generated C++ file ---"
 mv "$ARTIFACTS_DIR/model" "$ARTIFACTS_DIR/model.cpp"
 
+# --- Step 2: Generate model library for Android ARM64 ---
 echo "--- Running QNN Model Lib Generator (Step 2) ---"
-# This step builds the model lib for the HOST (x86_64)
 qnn-model-lib-generator \
     -c "$ARTIFACTS_DIR/model.cpp" \
     -b "$ARTIFACTS_DIR/model.bin" \
     -o "$ARTIFACTS_DIR" \
-    -t x86_64-linux-clang
+    -t aarch64-android
 
-echo "--- Running QNN Context Binary Generator (Step 3) ---"
+# --- Step 3: Skip context binary generation (can't run ARM64 tools on x86_64) ---
+# Instead, we'll use the model.bin directly from Step 1
+echo "--- Skipping Context Binary Generator (cross-platform limitation) ---"
+echo "Using serialized model.bin directly from qnn-onnx-converter"
 
-# Add the *new host* directory to the library path
-MODEL_LIB_DIR="$(pwd)/$ARTIFACTS_DIR/x86_64-linux-clang"
-export LD_LIBRARY_PATH=$MODEL_LIB_DIR:$LD_LIBRARY_PATH
+# The model.bin from qnn-onnx-converter already contains the serialized graph
+# and can be used directly with QnnContext_createFromBinary on the device
 
-# *** THIS IS THE FIX ***
-# 1. Point --config_file to the standard examples path.
-# 2. Add --platform_options to specify your exact chip.
-qnn-context-binary-generator \
-    --model "$MODEL_LIB_DIR/libmodel.so" \
-    --backend "$QNN_SDK_ROOT/lib/x86_64-linux-clang/libQnnHtp.so" \
-    --binary_file "$ARTIFACTS_DIR/npu_model.bin" \
-    --config_file "$QNN_SDK_ROOT/examples/QNN/common/backend_extensions/htp_config.json" \
-    --platform_options "htp.socModel:sm8550"
+# --- Step 4: Copy binary to assets ---
+echo "--- Copying model to Android assets ---"
+ASSETS_DIR="$PROJECT_ROOT/android/app/src/main/assets"
+mkdir -p "$ASSETS_DIR"
+cp "$ARTIFACTS_DIR/model.bin" "$ASSETS_DIR/vector_search_10k.bin"
 
-# Unset the path just to be clean
-export LD_LIBRARY_PATH=""
+if [ -f "$ASSETS_DIR/vector_search_10k.bin" ]; then
+    echo "✓ Model copied successfully to $ASSETS_DIR/vector_search_10k.bin"
+else
+    echo "❌ ERROR: Copy failed. Check path or permissions."
+    exit 1
+fi
 
-# Copy the *newly generated* NPU model binary
-mkdir -p "$(dirname "$FINAL_OUTPUT_BIN")"
-cp "$ARTIFACTS_DIR/npu_model.bin" "$FINAL_OUTPUT_BIN"
-
-echo "✓ NPU model (npu_model.bin) copied to $FINAL_OUTPUT_BIN"
-echo "✓ Model ready for execution on Hexagon NPU"
+# --- Step 5: Cleanup ---
 echo "Cleaning up temporary artifacts..."
-rm -rf "$RAW_DIR" "$QUANT_INPUT_LIST" "$ARTIFACTS_DIR"
+rm -rf "$RAW_DIR" "$QUANT_INPUT_LIST"
+# Keep qnn_artifacts for debugging
 
 echo "--- Conversion complete ---"
