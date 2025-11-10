@@ -57,14 +57,23 @@ python3 prepare/create_model.py
 echo "--- Running QNN Conversion ---"
 # This script sources the QNN env and runs the converter tools
 bash qnn/convert_to_qnn.sh
+
 # 5. Build the C++ executable
 echo "--- Building C++ Host Executable ---"
 # We need to pass QNN_SDK_ROOT to the makefile
 # ndk-build is picky about where it's run
 # FIX: Correct path to JNI directory
 pushd android/app/main/jni
+
+# --- ✅ ADDED CLEAN STEP ---
+echo "Cleaning previous build..."
+$NDK_BUILD clean
+# --- END OF ADDED STEP ---
+
+echo "Starting new build..."
 $NDK_BUILD QNN_SDK_ROOT=$QNN_SDK_ROOT
 popd
+
 # 6. Copy executable to a clean location
 mkdir -p android/output/
 cp android/app/main/libs/arm64-v8a/qidk_rag_demo android/output/
