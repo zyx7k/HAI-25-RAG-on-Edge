@@ -11,7 +11,7 @@ LOCAL_MODULE := libQnnHtp
 LOCAL_SRC_FILES := $(QNN_SDK_ROOT)/lib/aarch64-android/libQnnHtp.so
 include $(PREBUILT_SHARED_LIBRARY)
 
-# --- Build executable ---
+# --- Executable target ---
 include $(CLEAR_VARS)
 LOCAL_MODULE := qidk_rag_demo
 LOCAL_MODULE_TAGS := optional
@@ -23,9 +23,7 @@ LOCAL_SRC_FILES := \
 LOCAL_CPPFLAGS += -std=c++17 -Wall -Werror -fPIE -fexceptions
 LOCAL_CPP_FEATURES += exceptions rtti
 
-# --- FIXED: Provide *both* include paths ---
-# This is necessary because the QNN headers include each other
-# using different relative paths.
+# Include QNN headers and local sources
 LOCAL_C_INCLUDES += \
     $(QNN_SDK_ROOT)/include \
     $(QNN_SDK_ROOT)/include/QNN \

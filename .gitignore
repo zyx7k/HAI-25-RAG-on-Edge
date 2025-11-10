@@ -1,0 +1,46 @@
+# ======================================
+# QIDK-RAG-DEMO PROJECT .gitignore
+# ======================================
+
+# --- Python environments ---
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# --- ONNX and model artifacts ---
+models/*.onnx
+android/app/src/main/assets/*.bin
+android/output/
+output/
+qnn/qnn_artifacts/
+qnn/raw_inputs/
+qnn/input_list.txt
+*.bin
+*.raw
+
+# --- Build / Compilation artifacts ---
+*.o
+*.a
+*.so
+*.out
+*.exe
+
+# --- Temporary data / results ---
+results.txt
+*.tmp
+*.bak
+*.swp
+
+# --- IDE & Editor settings ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- System files ---
+.DS_Store
+Thumbs.db

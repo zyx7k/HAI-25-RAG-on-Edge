@@ -1,186 +1,116 @@
 #!/bin/bash
 set -e
 
-# --- CONFIGURE THESE PATHS ---
+# --- CONFIGURATION ---
 : "${QNN_SDK_ROOT:=$HOME/qualcomm/qnn}"
-
-# Set to true/false to match build.sh
 USE_FULL_DATASET=false
-
 # --- END CONFIGURATION ---
 
-# Local file paths
+# Local paths
 HOST_EXE=./android/output/qidk_rag_demo
 if [ "$USE_FULL_DATASET" = true ]; then
     MODEL_BIN=./android/app/src/main/assets/vector_search_1M.bin
-    QUERY_FILE=./data/siftsmall_query.fvecs
 else
     MODEL_BIN=./android/app/src/main/assets/vector_search_10k.bin
-    QUERY_FILE=./data/siftsmall_query.fvecs
 fi
+QUERY_FILE=./data/siftsmall_query.fvecs
 
-# QNN Libraries to push
+# QNN libs
 QNN_LIBS_DIR=$QNN_SDK_ROOT/lib/aarch64-android
-
-# NOTE: We're using the libraries that were actually built and installed by ndk-build
-# These are in android/app/main/libs/arm64-v8a/
 BUILT_LIBS_DIR=./android/app/main/libs/arm64-v8a
 
-QNN_LIBS=(
-    "libQnnHtp.so"
-    "libQnnSystem.so"
-    "libc++_shared.so"
-)
-
-# Additional libraries that might be needed (check if they exist)
+QNN_LIBS=("libQnnHtp.so" "libQnnSystem.so" "libc++_shared.so")
 OPTIONAL_LIBS=(
     "libQnnHtpNetRunExtensions.so"
-    "libQnnHtpV73Stub.so"  # For Snapdragon 8 Gen 2
-    "libQnnHtpV75Stub.so"  # For Snapdragon 8 Gen 3
-    "libQnnHtpV79Stub.so"  # For Snapdragon 8 Gen 4/Elite
+    "libQnnHtpV73Stub.so"
+    "libQnnHtpV75Stub.so"
+    "libQnnHtpV79Stub.so"
 )
+ADSP_LIBS_DIR=$QNN_SDK_ROOT/lib/aarch64-android
+ADSP_LIBS=("libQnnHtpV73Skel.so" "libQnnHtpV75Skel.so" "libQnnHtpV79Skel.so")
 
-# DSP Skeleton library (device-specific)
-ADSP_LIBS_DIR=$QNN_SDK_ROOT/lib/aarch64-android/
-ADSP_LIBS=(
-    "libQnnHtpV73Skel.so"  # SD 8 Gen 2
-    "libQnnHtpV75Skel.so"  # SD 8 Gen 3  
-    "libQnnHtpV79Skel.so"  # SD 8 Gen 4/Elite
-)
-
-# On-device paths
+# Remote paths
 REMOTE_DIR=/data/local/tmp/qnn-rag-demo
 REMOTE_EXE=$REMOTE_DIR/qidk_rag_demo
 REMOTE_MODEL=$REMOTE_DIR/$(basename $MODEL_BIN)
 REMOTE_QUERY=$REMOTE_DIR/query.fvecs
 REMOTE_RESULTS=$REMOTE_DIR/results.txt
 
-echo "=== Deploying QNN RAG Demo to Device ==="
-echo ""
+echo "=== Deploying QNN RAG Demo ==="
 
-# Check if device is connected
+# Check device
 if ! adb devices | grep -q "device$"; then
-    echo "ERROR: No Android device detected. Please connect via ADB."
-    echo "Run 'adb devices' to check connection."
+    echo "ERROR: No device detected. Connect via ADB."
     exit 1
 fi
-
 echo "✓ Device connected"
-echo ""
 
-# Check if files exist
-if [ ! -f "$HOST_EXE" ]; then
-    echo "ERROR: Executable not found at $HOST_EXE"
-    echo "Please run build.sh first."
-    exit 1
-fi
+# Validate files
+for f in "$HOST_EXE" "$MODEL_BIN" "$QUERY_FILE"; do
+    [ ! -f "$f" ] && echo "ERROR: Missing $f" && exit 1
+done
 
-if [ ! -f "$MODEL_BIN" ]; then
-    echo "ERROR: Model binary not found at $MODEL_BIN"
-    exit 1
-fi
-
-if [ ! -f "$QUERY_FILE" ]; then
-    echo "ERROR: Query file not found at $QUERY_FILE"
-    exit 1
-fi
-
-echo "--- Step 1: Creating directory on device ---"
+# Step 1: Create remote directory
 adb shell "mkdir -p $REMOTE_DIR"
 echo "✓ Created $REMOTE_DIR"
 
-echo ""
-echo "--- Step 2: Pushing executable ---"
-adb push $HOST_EXE $REMOTE_EXE
+# Step 2: Push executable
+adb push $HOST_EXE $REMOTE_EXE >/dev/null
 adb shell "chmod +x $REMOTE_EXE"
-echo "✓ Pushed and made executable"
+echo "✓ Executable pushed"
 
-echo ""
-echo "--- Step 3: Pushing model and data ---"
-adb push $MODEL_BIN $REMOTE_MODEL
-adb push $QUERY_FILE $REMOTE_QUERY
+# Step 3: Push model + data
+adb push $MODEL_BIN $REMOTE_MODEL >/dev/null
+adb push $QUERY_FILE $REMOTE_QUERY >/dev/null
 echo "✓ Model and query data pushed"
 
-echo ""
-echo "--- Step 4: Pushing QNN libraries (from build output) ---"
+# Step 4: Push core QNN libs
 for lib in "${QNN_LIBS[@]}"; do
     if [ -f "$BUILT_LIBS_DIR/$lib" ]; then
-        echo "  Pushing $lib..."
-        adb push $BUILT_LIBS_DIR/$lib $REMOTE_DIR/
+        adb push "$BUILT_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
     else
-        echo "  WARNING: $lib not found in $BUILT_LIBS_DIR"
+        echo "⚠️  Missing $lib"
     fi
 done
 
-echo ""
-echo "--- Step 5: Pushing optional QNN stub libraries ---"
+# Step 5: Push optional stub libs
 for lib in "${OPTIONAL_LIBS[@]}"; do
-    if [ -f "$QNN_LIBS_DIR/$lib" ]; then
-        echo "  Pushing $lib..."
-        adb push $QNN_LIBS_DIR/$lib $REMOTE_DIR/
-    else
-        echo "  Skipping $lib (not found)"
-    fi
+    [ -f "$QNN_LIBS_DIR/$lib" ] && adb push "$QNN_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
 done
 
-echo ""
-echo "--- Step 6: Pushing DSP Skeleton library ---"
+# Step 6: Push DSP skeleton libs
 SKEL_PUSHED=false
 for lib in "${ADSP_LIBS[@]}"; do
     if [ -f "$ADSP_LIBS_DIR/$lib" ]; then
-        echo "  Pushing $lib..."
-        adb push $ADSP_LIBS_DIR/$lib $REMOTE_DIR/
+        adb push "$ADSP_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
         SKEL_PUSHED=true
     fi
 done
+[ "$SKEL_PUSHED" = false ] && echo "⚠️  No skeleton library found. Falling back to CPU."
 
-if [ "$SKEL_PUSHED" = false ]; then
-    echo "  WARNING: No skeleton library found. HTP backend might not work."
-    echo "  Device will fall back to CPU backend."
-fi
-
-echo ""
-echo "--- Step 7: Running inference on device ---"
-echo ""
-echo "Command: $REMOTE_EXE $REMOTE_MODEL $REMOTE_QUERY $REMOTE_RESULTS $REMOTE_DIR/libQnnHtp.so"
-echo ""
-
-# Run with proper environment variables
+# Step 7: Run inference
+echo "--- Running on device ---"
 adb shell "cd $REMOTE_DIR && \
            export LD_LIBRARY_PATH=$REMOTE_DIR:\$LD_LIBRARY_PATH && \
            export ADSP_LIBRARY_PATH=$REMOTE_DIR:\$ADSP_LIBRARY_PATH && \
            $REMOTE_EXE $REMOTE_MODEL $REMOTE_QUERY $REMOTE_RESULTS libQnnHtp.so"
-
 RESULT=$?
 
+# Step 8: Results
 if [ $RESULT -eq 0 ]; then
-    echo ""
-    echo "✓ Execution completed successfully!"
-    
-    echo ""
-    echo "--- Step 8: Pulling results ---"
-    adb pull $REMOTE_RESULTS ./results.txt
-    
-    echo ""
-    echo "=== Results Preview ==="
-    echo ""
+    echo "✓ Execution successful!"
+    adb pull $REMOTE_RESULTS ./results.txt >/dev/null
+    echo "--- Results (first 20 lines) ---"
     head -20 ./results.txt
-    
     echo ""
-    echo "=== Summary ==="
-    echo "✓ Full results saved to: ./results.txt"
-    echo "✓ Remote directory: $REMOTE_DIR"
-    echo ""
-    echo "To view all results: cat ./results.txt"
-    echo "To clean up device: adb shell rm -rf $REMOTE_DIR"
+    echo "Full results: ./results.txt"
+    echo "Remote dir: $REMOTE_DIR"
+    echo "Clean up: adb shell rm -rf $REMOTE_DIR"
 else
-    echo ""
-    echo "ERROR: Execution failed with code $RESULT"
-    echo ""
-    echo "Troubleshooting steps:"
-    echo "1. Check device logs: adb logcat | grep -i qnn"
-    echo "2. Try CPU backend: Edit script to use libQnnCpu.so instead"
-    echo "3. Verify device supports HTP: adb shell getprop ro.product.model"
-    echo "4. Check remote directory: adb shell ls -la $REMOTE_DIR"
+    echo "❌ Execution failed (code $RESULT)"
+    echo "Debug:"
+    echo "  adb logcat | grep -i qnn"
+    echo "  Try CPU backend: libQnnCpu.so"
+    echo "  adb shell ls -la $REMOTE_DIR"
     exit 1
 fi

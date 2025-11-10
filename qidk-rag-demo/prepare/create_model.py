@@ -1,100 +1,89 @@
-import onnx
-from onnx import helper, TensorProto
-import numpy as np
 import os
-from download_data import read_fvecs
+import onnx
+import numpy as np
+from onnx import helper, TensorProto
 
 # --- Configuration ---
-# Set to True to use the full 1M dataset (slower, ~500MB ONNX file)
-# Set to False to use the 10k "dev" dataset (faster, ~5MB ONNX file)
-USE_FULL_DATASET = False
-
-if USE_FULL_DATASET:
-    BASE_FVECS = "data/siftsmall_base.fvecs"
-    NUM_DOCS = 1_000_000
-    ONNX_MODEL_PATH = "models/vector_search_1M.onnx"
-else:
-    BASE_FVECS = "data/siftsmall_base.fvecs"
-    NUM_DOCS = 10_000
-    ONNX_MODEL_PATH = "models/vector_search_10k.onnx"
-
+BASE_FVECS = "data/siftsmall_base.fvecs"
+NUM_DOCS = 10_000
 DIM = 128
+ONNX_MODEL_PATH = "models/vector_search_10k.onnx"
 # --- End Configuration ---
 
+
+# --- Minimal .fvecs Reader ---
+def read_fvecs(filename, count=-1, offset=0):
+    """Reads an .fvecs file and returns a (num_vectors, dim) float32 numpy array."""
+    with open(filename, 'rb') as f:
+        if offset > 0:
+            f.seek(offset * (4 + DIM * 4))  # Skip vectors
+
+        vectors = []
+        while True:
+            dim_data = f.read(4)
+            if not dim_data:
+                break
+            dim = np.frombuffer(dim_data, dtype='int32')[0]
+            if dim != DIM:
+                raise IOError(f"Invalid dim {dim}, expected {DIM}")
+            vec = np.frombuffer(f.read(dim * 4), dtype='float32')
+            if len(vec) != dim:
+                raise IOError("Incomplete vector data")
+            vectors.append(vec)
+            if 0 < count <= len(vectors):
+                break
+    return np.array(vectors, dtype='float32')
+
+
+# --- ONNX Model Creation ---
 def create_matmul_model():
     print(f"Loading document vectors from {BASE_FVECS}...")
-    # Load the document database
-    # Shape: (NUM_DOCS, DIM) e.g., (10000, 128)
     doc_embeddings = read_fvecs(BASE_FVECS, count=NUM_DOCS)
-    
     if doc_embeddings.shape[0] != NUM_DOCS:
         raise ValueError(f"Loaded {doc_embeddings.shape[0]} vectors, expected {NUM_DOCS}")
-    
     print(f"Loaded {doc_embeddings.shape[0]} document vectors.")
 
-    # We need to compute: C = A * B^T
-    # A = query (Input) -> Shape: [1, 128]
-    # B = docs (Constant) -> Shape: [10000, 128]
-    # We must transpose B to B^T -> Shape: [128, 10000]
-    # MatMul(A, B^T) -> [1, 128] * [128, 10000] = [1, 10000] (Scores)
-    
-    # Transpose and ensure data is C-contiguous
+    # Transpose to [DIM, NUM_DOCS]
     doc_embeddings_T = np.ascontiguousarray(doc_embeddings.T, dtype=np.float32)
-    
-    # 1. Define the (dynamic) query input
-    query_input = helper.make_tensor_value_info(
-        "query", 
-        TensorProto.FLOAT, 
-        [1, DIM] # Batch size 1, dimension 128
-    )
 
-    # 2. Define the (constant) document matrix (transposed)
-    # This is an "Initializer", which means it's a constant
-    # weight embedded in the model file.
+    # Define input, constant, output
+    query_input = helper.make_tensor_value_info("query", TensorProto.FLOAT, [1, DIM])
     doc_matrix_T = helper.make_tensor(
         name="doc_embeddings_T",
         data_type=TensorProto.FLOAT,
-        dims=[DIM, NUM_DOCS], # e.g., [128, 10000]
-        vals=doc_embeddings_T.flatten().tolist()
+        dims=[DIM, NUM_DOCS],
+        vals=doc_embeddings_T.flatten().tolist(),
     )
+    scores_output = helper.make_tensor_value_info("scores", TensorProto.FLOAT, [1, NUM_DOCS])
 
-    # 3. Define the output
-    scores_output = helper.make_tensor_value_info(
-        "scores",
-        TensorProto.FLOAT,
-        [1, NUM_DOCS] # e.g., [1, 10000]
-    )
-
-    # 4. Define the MatMul node
+    # MatMul operation
     matmul_node = helper.make_node(
         "MatMul",
-        inputs=["query", "doc_embeddings_T"], # Input name, Constant name
+        inputs=["query", "doc_embeddings_T"],
         outputs=["scores"],
-        name="VecSearchMatMul"
+        name="VecSearchMatMul",
     )
 
-    # 5. Create the graph
+    # Build graph & model
     graph = helper.make_graph(
         nodes=[matmul_node],
         name="VectorSearchGraph",
-        inputs=[query_input],    # Only dynamic inputs go here
+        inputs=[query_input],
         outputs=[scores_output],
-        initializer=[doc_matrix_T] # Constants/weights go here
+        initializer=[doc_matrix_T],
     )
-
-    # 6. Create the model
     model = helper.make_model(graph)
-    model.opset_import[0].version = 13 # Use a common opset
-    
-    # 7. Check and save the model
+    model.opset_import[0].version = 13
+
     os.makedirs("models", exist_ok=True)
     onnx.checker.check_model(model)
     onnx.save(model, ONNX_MODEL_PATH)
 
-    print(f"Model saved to {ONNX_MODEL_PATH}")
-    print(f"  Input: 'query' (float32, [1, {DIM}])")
-    print(f"  Constant: 'doc_embeddings_T' (float32, [{DIM}, {NUM_DOCS}])")
-    print(f"  Output: 'scores' (float32, [1, {NUM_DOCS}])")
+    print(f"Model saved: {ONNX_MODEL_PATH}")
+    print(
+        f"Input: 'query' [1, {DIM}] | Constant: 'doc_embeddings_T' [{DIM}, {NUM_DOCS}] | Output: 'scores' [1, {NUM_DOCS}]"
+    )
+
 
 if __name__ == "__main__":
     create_matmul_model()

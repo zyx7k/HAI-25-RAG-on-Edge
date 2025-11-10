@@ -1,80 +1,77 @@
 #!/bin/bash
 set -e
+
 # --- Configuration ---
-# Set to true/false to match create_model.py
-USE_FULL_DATASET=false
-if [ "$USE_FULL_DATASET" = true ]; then
-    ONNX_MODEL=models/vector_search_1M.onnx
-    QUERY_DATA_FILE=data/siftsmall_query.fvecs
-    OUTPUT_BIN=android/app/src/main/assets/vector_search_1M.bin
-else
-    ONNX_MODEL=models/vector_search_10k.onnx
-    QUERY_DATA_FILE=data/siftsmall_query.fvecs
-    OUTPUT_BIN=android/app/src/main/assets/vector_search_10k.bin
-fi
-# This script must be run from the root qidk-rag-demo/ directory
-# It requires QNN_SDK_ROOT to be set
+ONNX_MODEL=models/vector_search_10k.onnx
+QUERY_DATA_FILE=data/siftsmall_query.fvecs
+OUTPUT_BIN=android/app/src/main/assets/vector_search_10k.bin
+# --- End Configuration ---
+
+# Ensure QNN SDK path is set
 if [ -z "$QNN_SDK_ROOT" ]; then
     echo "ERROR: QNN_SDK_ROOT is not set."
-    echo "Please set it (e.g., export QNN_SDK_ROOT=~/qualcomm/qai-direct-sdk)"
+    echo "Please set it (e.g., export QNN_SDK_ROOT=~/qualcomm/qnn)"
     exit 1
 fi
-# This file will list the raw query vectors for quantization
-QUANT_INPUT_LIST=./qnn/input_list.txt
-# 1. Source the QNN SDK environment
-source $QNN_SDK_ROOT/bin/envsetup.sh
 
-# FIX: Ensure qnn_artifacts is a directory, not a file
-if [ -f "./qnn/qnn_artifacts" ]; then
-    echo "Removing qnn_artifacts file..."
-    rm ./qnn/qnn_artifacts
-fi
-mkdir -p ./qnn/qnn_artifacts
+# Source QNN environment
+source "$QNN_SDK_ROOT/bin/envsetup.sh"
 
-echo "Creating representative dataset for quantization..."
-# 2. Create the quantization input list
-#    We need to convert the .fvecs query file to raw float32 binaries
-#    and list them in input_list.txt.
-#    The QNN tools expect one raw file per input.
+# Prepare directories
+ARTIFACTS_DIR=./qnn/qnn_artifacts
 RAW_DIR=./qnn/raw_inputs
-rm -rf $RAW_DIR $QUANT_INPUT_LIST
-mkdir -p $RAW_DIR
-# Use a python script to do this conversion
-python3 -c "
-import numpy as np; import sys;
-sys.path.append('./prepare'); 
-from download_data import read_fvecs;
-queries = read_fvecs('$QUERY_DATA_FILE');
-input_list_file = open('$QUANT_INPUT_LIST', 'w');
-for i, q in enumerate(queries):
-    raw_path = f'$RAW_DIR/query_{i}.raw';
-    q.astype('float32').tofile(raw_path);
-    input_list_file.write('query:=' + raw_path + '\n');
-input_list_file.close();
-print(f'Wrote {len(queries)} raw query files to $RAW_DIR');
-"
-echo "Representative dataset created."
-echo "Running qnn-onnx-converter..."
-# 3. Run the ONNX Converter
-#    This converts the .onnx file and quantizes it using the
-#    representative dataset. It outputs a QNN model .cpp and .bin
+QUANT_INPUT_LIST=./qnn/input_list.txt
+
+rm -rf "$ARTIFACTS_DIR" "$RAW_DIR" "$QUANT_INPUT_LIST"
+mkdir -p "$ARTIFACTS_DIR" "$RAW_DIR"
+
+echo "--- Preparing representative dataset ---"
+python3 - <<'PYCODE'
+import numpy as np, os
+
+DIM = 128
+QUERY_FILE = "data/siftsmall_query.fvecs"
+RAW_DIR = "./qnn/raw_inputs"
+LIST_FILE = "./qnn/input_list.txt"
+
+def read_fvecs(filename, count=-1):
+    with open(filename, 'rb') as f:
+        vectors = []
+        while True:
+            dim_data = f.read(4)
+            if not dim_data:
+                break
+            dim = np.frombuffer(dim_data, dtype='int32')[0]
+            vec = np.frombuffer(f.read(dim * 4), dtype='float32')
+            vectors.append(vec)
+            if 0 < count <= len(vectors):
+                break
+    return np.array(vectors, dtype='float32')
+
+queries = read_fvecs(QUERY_FILE)
+with open(LIST_FILE, 'w') as f:
+    for i, q in enumerate(queries):
+        path = f"{RAW_DIR}/query_{i}.raw"
+        q.astype('float32').tofile(path)
+        f.write(f"query:={path}\n")
+
+print(f"Wrote {len(queries)} raw queries to {RAW_DIR}")
+PYCODE
+
+echo "--- Running QNN ONNX Converter ---"
 qnn-onnx-converter \
     --input_network "$ONNX_MODEL" \
     --input_list "$QUANT_INPUT_LIST" \
-    --output_path ./qnn/qnn_artifacts/model \
+    --output_path "$ARTIFACTS_DIR/model" \
     --quantization_overrides ./qnn/quant_overrides.json
-echo "ONNX model converted."
 
-echo "Using quantized model binary for HTP (Hexagon NPU)..."
-# 4. Copy the quantized model binary to assets
-#    The model.bin from qnn-onnx-converter is already quantized and ready for HTP
-mkdir -p $(dirname $OUTPUT_BIN)
-cp ./qnn/qnn_artifacts/model.bin $OUTPUT_BIN
+# Copy quantized model binary
+mkdir -p "$(dirname "$OUTPUT_BIN")"
+cp "$ARTIFACTS_DIR/model.bin" "$OUTPUT_BIN"
 
-echo "Quantized model copied to $OUTPUT_BIN"
-echo "Note: This model will run on Hexagon NPU when loaded with QNN HTP backend on device."
+echo "✓ Quantized model copied to $OUTPUT_BIN"
+echo "✓ Model ready for execution on Hexagon NPU"
+echo "Cleaning up temporary artifacts..."
+rm -rf "$RAW_DIR" "$QUANT_INPUT_LIST" "$ARTIFACTS_DIR"
 
-echo "QNN Context Binary created at $OUTPUT_BIN"
-echo "Cleaning up artifacts..."
-rm -rf ./qnn/raw_inputs ./qnn/input_list.txt ./qnn/qnn_artifacts
-echo "Conversion complete - model is compiled for Hexagon NPU acceleration!"
+echo "--- Conversion complete ---"
