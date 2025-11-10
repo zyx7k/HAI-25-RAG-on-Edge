@@ -35,7 +35,12 @@ QnnRunner::~QnnRunner() { cleanup(); }
 void QnnRunner::loadBackend() {
     QNN_LOG("INFO", "Loading QNN backend libraries...");
 
-    m_systemLibHandle = dlopen("/root/qualcomm/qnn/lib/aarch64-android/libQnnSystem.so", RTLD_NOW | RTLD_LOCAL);
+    // FIXED: Use relative path instead of hardcoded absolute path
+    m_systemLibHandle = dlopen("libQnnSystem.so", RTLD_NOW | RTLD_LOCAL);
+    if (!m_systemLibHandle) {
+        // Try with ./ prefix as fallback
+        m_systemLibHandle = dlopen("./libQnnSystem.so", RTLD_NOW | RTLD_LOCAL);
+    }
     if (!m_systemLibHandle)
         throw std::runtime_error("Failed to load libQnnSystem.so: " + std::string(dlerror()));
 
@@ -123,7 +128,7 @@ void QnnRunner::setupTensors() {
 
     m_inputTensor = QNN_TENSOR_INIT;
     m_inputTensor.version = QNN_TENSOR_VERSION_1;
-    m_inputTensor.v1.name = "input";
+    m_inputTensor.v1.name = "query";
     m_inputTensor.v1.type = QNN_TENSOR_TYPE_APP_WRITE;
     m_inputTensor.v1.dataFormat = QNN_TENSOR_DATA_FORMAT_FLAT_BUFFER;
     m_inputTensor.v1.dataType = QNN_DATATYPE_FLOAT_32;
@@ -135,7 +140,7 @@ void QnnRunner::setupTensors() {
 
     m_outputTensor = QNN_TENSOR_INIT;
     m_outputTensor.version = QNN_TENSOR_VERSION_1;
-    m_outputTensor.v1.name = "output";
+    m_outputTensor.v1.name = "scores";
     m_outputTensor.v1.type = QNN_TENSOR_TYPE_APP_READ;
     m_outputTensor.v1.dataFormat = QNN_TENSOR_DATA_FORMAT_FLAT_BUFFER;
     m_outputTensor.v1.dataType = QNN_DATATYPE_FLOAT_32;
