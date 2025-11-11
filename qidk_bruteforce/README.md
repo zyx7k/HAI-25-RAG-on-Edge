@@ -161,6 +161,7 @@ adb --version
    # You should see your device listed
    # If prompted on device, allow USB debugging
    ```
+4. Set the device in **File Transfer** mode.
 
 ---
 
