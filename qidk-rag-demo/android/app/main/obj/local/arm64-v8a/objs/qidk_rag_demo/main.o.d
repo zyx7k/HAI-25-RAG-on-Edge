@@ -71,6 +71,8 @@
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/__split_buffer \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/iomanip \
   /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/vector \
+  /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/cmath \
+  /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/math.h \
   /root/qidk-rag-demo/android/app/main/jni/QnnRunner.h \
   /root/qualcomm/qnn/include/QNN/QnnInterface.h \
   /root/qualcomm/qnn/include/QNN/QnnCommon.h \
@@ -233,6 +235,10 @@
 /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/iomanip:
 
 /root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/vector:
+
+/root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/cmath:
+
+/root/Android/Sdk/ndk/25.2.9519653/android-ndk-r25c/sources/cxx-stl/llvm-libc++/include/math.h:
 
 /root/qidk-rag-demo/android/app/main/jni/QnnRunner.h:
 

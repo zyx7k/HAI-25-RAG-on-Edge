@@ -15,6 +15,7 @@ else
     DATA_BIN=./android/app/src/main/assets/vector_search_10k.bin
 fi
 QUERY_FILE=./data/siftsmall_query.fvecs
+DOC_FILE=./data/siftsmall_base.fvecs
 
 # QNN libs
 QNN_LIBS_DIR=$QNN_SDK_ROOT/lib/aarch64-android
@@ -35,6 +36,7 @@ REMOTE_EXE=$REMOTE_DIR/qidk_rag_demo
 REMOTE_MODEL_BIN=$REMOTE_DIR/model.bin
 REMOTE_DATA=$REMOTE_DIR/$(basename $DATA_BIN)
 REMOTE_QUERY=$REMOTE_DIR/query.fvecs
+REMOTE_DOC=$REMOTE_DIR/docs.fvecs
 REMOTE_RESULTS=$REMOTE_DIR/results.txt
 
 echo "=== Deploying QNN RAG Demo ==="
@@ -47,7 +49,7 @@ fi
 echo "✓ Device connected"
 
 # Validate files
-for f in "$HOST_EXE" "$MODEL_BIN" "$DATA_BIN" "$QUERY_FILE"; do
+for f in "$HOST_EXE" "$MODEL_BIN" "$DATA_BIN" "$QUERY_FILE" "$DOC_FILE"; do
     [ ! -f "$f" ] && echo "ERROR: Missing $f" && exit 1
 done
 
@@ -64,7 +66,8 @@ echo "✓ Executable pushed"
 adb push $MODEL_BIN $REMOTE_MODEL_BIN >/dev/null
 adb push $DATA_BIN $REMOTE_DATA >/dev/null
 adb push $QUERY_FILE $REMOTE_QUERY >/dev/null
-echo "✓ Model binary and query data pushed"
+adb push $DOC_FILE $REMOTE_DOC >/dev/null
+echo "✓ Model binary, query data, and document embeddings pushed"
 
 # Step 4: Push core QNN libs
 for lib in "${QNN_LIBS[@]}"; do
@@ -124,7 +127,7 @@ echo "--- Running on device ---"
 adb shell "cd $REMOTE_DIR && \
            export LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH && \
            export ADSP_LIBRARY_PATH=. && \
-           ./qidk_rag_demo model_context.bin query.fvecs results.txt libQnnHtp.so"
+           ./qidk_rag_demo model_context.bin query.fvecs results.txt libQnnHtp.so docs.fvecs"
 RESULT=$?
 
 # Step 8: Results

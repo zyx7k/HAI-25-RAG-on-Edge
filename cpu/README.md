@@ -56,7 +56,7 @@ The program is run from the command line, providing the data files and $k$ as ar
 
 ```bash
 # Run the baseline
-./baseline sift/sift_base.fvecs sift/sift_query.fvecs 10 knn_results.txt
+./baseline siftsmall/siftsmall_base.fvecs siftsmall/siftsmall_query.fvecs 5 knn_results.txt
 ```
 
 **Command-Line Arguments:**
