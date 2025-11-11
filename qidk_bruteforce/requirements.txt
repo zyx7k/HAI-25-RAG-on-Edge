@@ -1,0 +1,20 @@
+# Python Dependencies for QNN RAG Demo
+# These specific versions are required for compatibility with QNN SDK
+
+# ONNX and Core Dependencies
+# ONNX 1.13.1 is required for QNN converter compatibility
+onnx==1.13.1
+
+# Protobuf 3.20.3 is required by ONNX 1.13.1
+protobuf==3.20.3
+
+# NumPy < 1.24 is required for compatibility with ONNX 1.13.1
+numpy<1.24
+
+# Configuration and Utilities
+pyyaml==6.0
+packaging==21.3
+
+# Optional but recommended
+requests
+pandas
