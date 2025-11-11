@@ -60,7 +60,7 @@ The system achieves significant performance improvements by offloading matrix mu
 
 ---
 
-## 📦 Prerequisites
+## Prerequisites
 
 ### 1. Android NDK
 
@@ -211,7 +211,7 @@ pip install -r requirements.txt
 
 ---
 
-## 📥 Dataset Setup
+## Dataset Setup
 
 ### Option 1: Download SIFT Small Dataset (Recommended for Testing)
 
@@ -380,7 +380,7 @@ bash scripts/deploy.sh siftsmall 10k 5
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 qidk-rag-demo/
@@ -489,7 +489,7 @@ head -20 results/siftsmall_10k/results.txt
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
