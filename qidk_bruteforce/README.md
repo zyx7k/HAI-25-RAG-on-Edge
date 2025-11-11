@@ -19,7 +19,6 @@
 - [Project Structure](#project-structure)
 - [Performance](#performance)
 - [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
 
 ---
 
