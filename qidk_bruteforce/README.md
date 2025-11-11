@@ -1,14 +1,13 @@
-# QNN RAG Demo - Vector Search on Qualcomm NPU
+# Vector Search on Qualcomm NPU
 
 > High-performance vector similarity search using Qualcomm's AI Engine Direct (QNN SDK) on Snapdragon devices
 
 [![Platform](https://img.shields.io/badge/Platform-Qualcomm%20QIDK-green)]()
 [![Android](https://img.shields.io/badge/Android-21%2B-blue)]()
-[![License](https://img.shields.io/badge/License-MIT-yellow)]()
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
@@ -24,7 +23,7 @@
 
 ---
 
-## 🎯 Overview
+## Overview
 
 This project demonstrates **high-performance vector similarity search** using the Qualcomm Hexagon Neural Processing Unit (NPU) on Snapdragon-powered devices. It leverages:
 
@@ -37,18 +36,16 @@ The system achieves significant performance improvements by offloading matrix mu
 
 ---
 
-## ✨ Features
+## Features
 
-- 🚀 **NPU-Accelerated Search**: Leverages Qualcomm Hexagon for fast vector operations
-- 📊 **Multi-Dataset Support**: Works with both siftsmall (10k) and sift (1M) datasets
-- 🔧 **Configurable TOP-K**: Retrieve any number of nearest neighbors
-- 📈 **Comprehensive Metrics**: Latency, throughput, percentiles (p50/p95/p99)
-- 🎯 **Production-Ready**: Automatic dimension reading, no hardcoded values
-- 📦 **Easy Setup**: Automated build and deployment scripts
+- **NPU-Accelerated Search**: Leverages Qualcomm Hexagon for fast vector operations
+- **Multi-Dataset Support**: Works with both siftsmall (10k) and sift (1M) datasets
+- **Configurable TOP-K**: Retrieve any number of nearest neighbors
+- **Comprehensive Metrics**: Latency, throughput, percentiles (p50/p95/p99)
 
 ---
 
-## 💻 System Requirements
+## System Requirements
 
 ### Hardware
 - **Device**: Qualcomm QIDK or Snapdragon-powered Android device
@@ -168,7 +165,7 @@ adb --version
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Step 1: Clone the Repository
 
@@ -241,7 +238,7 @@ rm siftsmall.tar.gz
 cd ../..
 ```
 
-### Option 2: Download SIFT Dataset (For Production/Benchmarking)
+### Option 2: Download SIFT Dataset (For Benchmarking)
 
 **Size**: ~550 MB compressed  
 **Vectors**: 1,000,000 base vectors, 10,000 query vectors  
@@ -285,7 +282,7 @@ data/
 
 ---
 
-## 🎮 Usage
+## Usage
 
 ### Quick Start: Run All Datasets
 
@@ -418,14 +415,11 @@ qidk-rag-demo/
 │   └── run_all_datasets.sh   # Run all experiments
 ├── requirements.txt           # Python dependencies
 ├── README.md                 # This file
-├── MULTI_DATASET_GUIDE.md    # Dataset usage guide
-├── HARDCODED_ANALYSIS.md     # Technical analysis
-└── CHANGES.md                # Change log
 ```
 
 ---
 
-## 📊 Performance
+## Performance
 
 ### Results Structure
 
@@ -585,7 +579,7 @@ If you encounter issues:
 
 ---
 
-## 🧹 Cleanup
+## Cleanup
 
 ### Clean Build Artifacts
 
@@ -616,51 +610,3 @@ rm -rf models/*.onnx
 ```bash
 adb shell rm -rf /data/local/tmp/qnn-rag-demo
 ```
-
----
-
-## 📖 Additional Documentation
-
-- **[MULTI_DATASET_GUIDE.md](MULTI_DATASET_GUIDE.md)** - Detailed guide for working with multiple datasets
-- **[HARDCODED_ANALYSIS.md](HARDCODED_ANALYSIS.md)** - Analysis of configuration and hardcoded values
-- **[CHANGES.md](CHANGES.md)** - Complete change log and migration guide
-- **[QUICK_REFERENCE.sh](QUICK_REFERENCE.sh)** - Quick command reference
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **Qualcomm** for the AI Engine Direct SDK
-- **INRIA** for the SIFT datasets
-- The open-source community for tools and inspiration
-
----
-
-## 📞 Support
-
-For questions and support:
-- Open an issue on GitHub
-- Check existing documentation
-- Review Qualcomm QNN SDK documentation
-
----
-
-**Happy Vector Searching! 🚀**
