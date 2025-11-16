@@ -1,0 +1,14 @@
+{
+    "inputs": {
+        "query": {
+            "data_type": "float"
+        }
+    },
+    "outputs": {
+        "scores": {
+            "data_type": "float"
+        }
+    },
+    "param_encodings": {},
+    "activation_encodings": {}
+}
