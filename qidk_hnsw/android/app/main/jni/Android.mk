@@ -18,6 +18,7 @@ LOCAL_MODULE_TAGS := optional
 
 LOCAL_SRC_FILES := \
     main.cpp \
+    hnsw_search.cpp \
     QnnRunner.cpp
 
 LOCAL_CPPFLAGS += -std=c++17 -Wall -Wno-unused-variable -Wno-unused-parameter -fPIE -fexceptions

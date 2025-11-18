@@ -61,9 +61,6 @@ private:
         const std::vector<uint32_t> &candidates,
         std::vector<float> &distances);
 
-    // Fallback: compute single distance on CPU
-    float compute_distance_cpu(const std::vector<float> &query, uint32_t point_id);
-
     // Core HNSW search at a specific layer
     std::vector<std::pair<float, uint32_t>> search_layer(
         const std::vector<float> &query,

@@ -33,15 +33,15 @@ void load_fvecs(const std::string &filename, std::vector<std::vector<float>> &ve
 
 int main(int argc, char *argv[])
 {
-    if (argc != 8)
+    if (argc != 9)
     {
         std::cerr << "Usage: " << argv[0]
                   << " <hnsw_index.bin> <vectors.fvecs> <queries.fvecs> <results_dir> "
-                  << "<backend.so> <top_k> <ef_search>" << std::endl;
+                  << "<model_context.bin> <backend.so> <top_k> <ef_search>" << std::endl;
         std::cerr << "\nExample:" << std::endl;
         std::cerr << "  " << argv[0]
                   << " siftsmall_hnsw_M16.bin siftsmall_base.fvecs siftsmall_query.fvecs "
-                  << "results libQnnHtp.so 10 50" << std::endl;
+                  << "results android/app/main/jni/context.bin libQnnHtp.so 10 50" << std::endl;
         return 1;
     }
 
@@ -49,9 +49,10 @@ int main(int argc, char *argv[])
     std::string vectors_file = argv[2];
     std::string query_file = argv[3];
     std::string results_dir = argv[4];
-    std::string backend_path = argv[5];
-    const int TOP_K = std::stoi(argv[6]);
-    const int EF_SEARCH = std::stoi(argv[7]);
+    std::string model_context_path = argv[5];
+    std::string backend_path = argv[6];
+    const int TOP_K = std::stoi(argv[7]);
+    const int EF_SEARCH = std::stoi(argv[8]);
 
     try
     {
@@ -66,10 +67,17 @@ int main(int argc, char *argv[])
         load_fvecs(query_file, query_vecs, query_dim);
         std::cout << "Loaded " << query_vecs.size() << " queries (dim=" << query_dim << ")." << std::endl;
 
-        // Initialize QNN (for potential NPU-accelerated distance computations)
-        // Note: For HNSW, we primarily use CPU for graph traversal
-        // NPU can be used for batch distance computations if beneficial
-        auto qnn_runner = std::make_shared<QnnRunner>("dummy_context.bin", backend_path);
+        // Initialize QNN for NPU-accelerated distance computations (REQUIRED)
+        std::shared_ptr<QnnRunner> qnn_runner = nullptr;
+        try {
+            std::cout << "Initializing QNN backend with context: " << model_context_path << std::endl;
+            qnn_runner = std::make_shared<QnnRunner>(model_context_path, backend_path);
+            std::cout << "QNN backend initialized successfully (NPU acceleration enabled)." << std::endl;
+        } catch (const std::exception &e) {
+            std::cerr << "ERROR: QNN initialization failed: " << e.what() << std::endl;
+            std::cerr << "This build requires NPU execution. Aborting." << std::endl;
+            return 2;
+        }
 
         // Initialize HNSW searcher
         std::cout << "Loading HNSW index..." << std::endl;

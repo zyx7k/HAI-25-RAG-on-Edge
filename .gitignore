@@ -1,50 +1,244 @@
 # ======================================
-# QIDK-RAG-DEMO PROJECT .gitignore
+# HAI-25-RAG-ON-EDGE PROJECT .gitignore
 # ======================================
 
-# --- Python environments ---
+# ==========================================
+# PYTHON ENVIRONMENTS & DEPENDENCIES
+# ==========================================
 .venv/
 venv/
 env/
+ENV/
+.virtualenv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.log
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
 
-# --- ONNX and model artifacts ---
-models/*.onnx
-android/app/src/main/assets/*.bin
-android/output/
+# ==========================================
+# DATASET FILES (DO NOT COMMIT)
+# ==========================================
+# SIFT datasets
+*.fvecs
+*.ivecs
+*.bvecs
+*.hdf5
+*.h5
+
+# Specific dataset directories
+cpu/sift/
+cpu/siftsmall/
+qidk_bruteforce/data/sift/
+qidk_bruteforce/data/siftsmall/
+qidk_hnsw/data/
+
+# Any data folders
+**/data/sift/
+**/data/siftsmall/
+
+# ==========================================
+# RESULTS & OUTPUT FILES
+# ==========================================
+# Result text files
+*_results.txt
+*_results_*.txt
+results.txt
+cpu.txt
+npu.txt
+
+# Output directories
 output/
-qnn/qnn_artifacts/
+android/output/
+qnn_output/
+
+# Logs
+*.log
+*.txt.log
+
+# ==========================================
+# MODEL FILES & ARTIFACTS
+# ==========================================
+# ONNX models
+*.onnx
+models/*.onnx
+prepare/*.onnx
+
+# QNN artifacts
+qnn/qnn_artifacts/**/*
+!qnn/qnn_artifacts/.gitkeep
 qnn/raw_inputs/
+qnn/calibration/*/input_list.txt
 qnn/input_list.txt
+
+# Model libraries
+**/model_lib/**/*
+!**/model_lib/.gitkeep
+
+# Binary model files
 *.bin
 *.raw
+*.dlc
+*.serialized
+android/app/src/main/assets/*.bin
+android/app/src/main/assets/*.onnx
 
-# --- Dataset Files ---
-*.fvecs
-*.fvecs
-
-# --- Build / Compilation artifacts ---
+# ==========================================
+# BUILD ARTIFACTS
+# ==========================================
+# C/C++ compiled files
 *.o
 *.a
 *.so
 *.out
 *.exe
+*.obj
+*.lib
+*.dll
+*.dylib
 
-# --- Temporary data / results ---
-results.txt
-*.tmp
-*.bak
-*.swp
+# CPU baseline binaries
+cpu/baseline
+cpu/cpu_baseline
+cpu_baseline
+baseline
 
-# --- IDE & Editor settings ---
+# Android build artifacts
+android/app/obj/
+android/app/libs/
+android/obj/
+android/libs/
+*.apk
+*.ap_
+*.dex
+local.properties
+
+# HNSW build artifacts
+qidk_hnsw/android/app/obj/
+qidk_hnsw/android/app/libs/
+qidk_hnsw/output/
+
+# NDK build
+*.d
+*.i
+
+# ==========================================
+# IDE & EDITOR SETTINGS
+# ==========================================
 .vscode/
 .idea/
 *.code-workspace
+*.sublime-project
+*.sublime-workspace
+.project
+.cproject
+.settings/
+*.swp
+*.swo
+*~
 
-# --- System files ---
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json.example
+!.vscode/tasks.json.example
+!.vscode/launch.json.example
+!.vscode/extensions.json.example
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# ==========================================
+# TEMPORARY & BACKUP FILES
+# ==========================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# ==========================================
+# SYSTEM FILES
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*/
+
+# ==========================================
+# JUPYTER NOTEBOOKS (optional outputs)
+# ==========================================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ==========================================
+# DOCUMENTATION BUILD
+# ==========================================
+docs/_build/
+docs/.doctrees/
+site/
+
+# ==========================================
+# PACKAGE MANAGEMENT
+# ==========================================
+# Node modules (if any)
+node_modules/
+
+# ==========================================
+# PROJECT-SPECIFIC EXCLUSIONS
+# ==========================================
+# Benchmark results (keep structure, not content)
+benchmarks/results/*.txt
+!benchmarks/results/RESULTS_SUMMARY.md
+!benchmarks/results/.gitkeep
+
+# Keep README files
+!**/README.md
+
+# Keep example configs
+!**/*example*
+!**/*.example
+
+# Keep scripts
+!**/*.sh
+!**/*.py
+!**/*.cpp
+!**/*.h
+
+# ==========================================
+# SECRETS & CREDENTIALS
+# ==========================================
+*.pem
+*.key
+*.cert
+.env
+.env.local
+secrets.json
+credentials.json

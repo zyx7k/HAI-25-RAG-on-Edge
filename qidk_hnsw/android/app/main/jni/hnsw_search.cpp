@@ -9,8 +9,12 @@ HNSWSearcher::HNSWSearcher(const std::string &index_path,
                            const std::string &vectors_path,
                            std::shared_ptr<QnnRunner> qnn_runner,
                            size_t batch_size)
-    : qnn_runner_(qnn_runner), batch_size_(batch_size)
+    : qnn_runner_(std::move(qnn_runner)), batch_size_(batch_size)
 {
+    if (!qnn_runner_)
+    {
+        throw std::runtime_error("QnnRunner must be provided for NPU-only execution");
+    }
 
     load_index(index_path);
     load_vectors(vectors_path);
@@ -25,6 +29,7 @@ HNSWSearcher::HNSWSearcher(const std::string &index_path,
     std::cout << "  Entry point: " << index_.entry_point << std::endl;
     std::cout << "  Max layer: " << index_.max_layer << std::endl;
     std::cout << "  NPU batch size: " << batch_size_ << std::endl;
+    std::cout << "  NPU acceleration: enforced" << std::endl;
 }
 
 void HNSWSearcher::load_index(const std::string &index_path)
@@ -87,18 +92,6 @@ void HNSWSearcher::load_vectors(const std::string &vectors_path)
     }
 }
 
-float HNSWSearcher::compute_distance_cpu(const std::vector<float> &query, uint32_t point_id)
-{
-    // L2 squared distance
-    float dist = 0.0f;
-    for (size_t i = 0; i < index_.dim; ++i)
-    {
-        float diff = query[i] - index_.vectors[point_id][i];
-        dist += diff * diff;
-    }
-    return dist;
-}
-
 void HNSWSearcher::compute_distances_batch(
     const std::vector<float> &query,
     const std::vector<uint32_t> &candidates,
@@ -116,79 +109,65 @@ void HNSWSearcher::compute_distances_batch(
         size_t end_idx = std::min(start_idx + batch_size_, candidates.size());
         size_t current_batch_size = end_idx - start_idx;
 
-        if (current_batch_size >= 8)
-        {
-            // Use NPU for larger batches (amortizes overhead)
-            // Create batch matrix: [batch_size, dim] (replicate the query for each doc)
-            for (size_t i = 0; i < current_batch_size; ++i)
-            {
-                std::memcpy(&batch_queries_[i * index_.dim],
-                            query.data(),
-                            index_.dim * sizeof(float));
-            }
-
-            // Call NPU with a batch of identical queries to get scores for all docs
-            std::vector<float> npu_batch_scores;
-            size_t batch_input_elems = current_batch_size * index_.dim;
-            std::vector<float> batch_input_view(batch_queries_.begin(), batch_queries_.begin() + batch_input_elems);
-
-            try {
-                qnn_runner_->executeBatch(batch_input_view, current_batch_size, npu_batch_scores);
-            } catch (const std::exception &e) {
-                // If NPU execution fails, fall back to CPU
-                for (size_t i = 0; i < current_batch_size; ++i)
-                {
-                    distances[start_idx + i] = compute_distance_cpu(query, candidates[start_idx + i]);
-                }
-                continue;
-            }
-
-            // Determine output size (per-sample)
-            const auto outDims = qnn_runner_->getOutputDims();
-            size_t out_elems_per_sample = 1;
-            if (!outDims.empty()) {
-                // assume batch is first dim
-                for (size_t d = 1; d < outDims.size(); ++d) out_elems_per_sample *= outDims[d];
-                if (outDims.size() == 1) out_elems_per_sample = outDims[0];
-            } else {
-                // fallback: assume index_.num_vectors
-                out_elems_per_sample = index_.num_vectors;
-            }
-
-            // Convert NPU dot-product scores to L2 squared distances:
-            // dist(q,d) = ||q||^2 + ||d||^2 - 2 * (q . d)
-            // Precompute query norm
-            float q_norm_sq = 0.0f;
-            for (size_t t = 0; t < index_.dim; ++t) q_norm_sq += query[t] * query[t];
-
-            // Sanity: out_elems_per_sample should match number of documents
-            if (out_elems_per_sample != index_.num_vectors) {
-                // If it doesn't match, fall back to CPU for safety
-                for (size_t i = 0; i < current_batch_size; ++i)
-                {
-                    distances[start_idx + i] = compute_distance_cpu(query, candidates[start_idx + i]);
-                }
-            } else {
-                for (size_t i = 0; i < current_batch_size; ++i)
-                {
-                    uint32_t doc_id = candidates[start_idx + i];
-                    size_t offset = i * out_elems_per_sample;
-                    // dot product from NPU for this (query_i, all_docs)
-                    float dot = npu_batch_scores[offset + doc_id];
-                    // Use precomputed doc norm
-                    float doc_norm_sq = doc_norms_[doc_id];
-                    float dist = q_norm_sq + doc_norm_sq - 2.0f * dot;
-                    distances[start_idx + i] = dist;
-                }
-            }
+        // For this deployment we require NPU execution for distance computations.
+        // If the QNN runner is not available or NPU execution fails, throw an error
+        // so the caller can abort — we do NOT fall back to CPU here.
+        if (!qnn_runner_) {
+            throw std::runtime_error("NPU runner not available: QNN must be initialized for NPU-only execution");
         }
-        else
+
+        // Create batch matrix: [batch_size, dim] (replicate the query for each doc)
+        for (size_t i = 0; i < current_batch_size; ++i)
         {
-            // Small batch: use CPU
-            for (size_t i = 0; i < current_batch_size; ++i)
-            {
-                distances[start_idx + i] = compute_distance_cpu(query, candidates[start_idx + i]);
-            }
+            std::memcpy(&batch_queries_[i * index_.dim],
+                        query.data(),
+                        index_.dim * sizeof(float));
+        }
+
+        // Call NPU with a batch of identical queries to get scores for all docs
+        std::vector<float> npu_batch_scores;
+        size_t batch_input_elems = current_batch_size * index_.dim;
+        std::vector<float> batch_input_view(batch_queries_.begin(), batch_queries_.begin() + batch_input_elems);
+
+        try {
+            qnn_runner_->executeBatch(batch_input_view, current_batch_size, npu_batch_scores);
+        } catch (const std::exception &e) {
+            throw std::runtime_error(std::string("NPU execution failed: ") + e.what());
+        }
+
+        // Determine output size (per-sample)
+        const auto outDims = qnn_runner_->getOutputDims();
+        size_t out_elems_per_sample = 1;
+        if (!outDims.empty()) {
+            // assume batch is first dim
+            for (size_t d = 1; d < outDims.size(); ++d) out_elems_per_sample *= outDims[d];
+            if (outDims.size() == 1) out_elems_per_sample = outDims[0];
+        } else {
+            // If graph info is unavailable, we cannot safely interpret outputs
+            throw std::runtime_error("QNN runner returned empty output dimensions; cannot map outputs to document scores");
+        }
+
+        // Convert NPU dot-product scores to L2 squared distances:
+        // dist(q,d) = ||q||^2 + ||d||^2 - 2 * (q . d)
+        // Precompute query norm
+        float q_norm_sq = 0.0f;
+        for (size_t t = 0; t < index_.dim; ++t) q_norm_sq += query[t] * query[t];
+
+        // Sanity: out_elems_per_sample should match number of documents
+        if (out_elems_per_sample != index_.num_vectors) {
+            throw std::runtime_error("Unexpected QNN output shape: per-sample output size does not match number of indexed vectors");
+        }
+
+        for (size_t i = 0; i < current_batch_size; ++i)
+        {
+            uint32_t doc_id = candidates[start_idx + i];
+            size_t offset = i * out_elems_per_sample;
+            // dot product from NPU for this (query_i, all_docs)
+            float dot = npu_batch_scores[offset + doc_id];
+            // Use precomputed doc norm
+            float doc_norm_sq = doc_norms_[doc_id];
+            float dist = q_norm_sq + doc_norm_sq - 2.0f * dot;
+            distances[start_idx + i] = dist;
         }
     }
 }

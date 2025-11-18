@@ -5,31 +5,33 @@
 #include <cmath>
 #include <dlfcn.h>
 #include <vector>
+#include <utility>
 
 #define QNN_LOG(level, msg) std::cout << "[QNN " << level << "] " << msg << std::endl
 
 QnnRunner::QnnRunner(const std::string& modelBinaryPath, const std::string& backendPath)
-    : m_backendLibHandle(nullptr),
-      m_systemLibHandle(nullptr),
-      m_backendHandle(nullptr),
-      m_deviceHandle(nullptr),
-      m_contextHandle(nullptr),
-      m_graphHandle(nullptr),
-      m_sysInterface(nullptr),
-      m_qnnInterface(nullptr),
-      m_inputBuffer(nullptr),
-      m_outputBuffer(nullptr),
-      m_inputBufferSize(0),
-      m_outputBufferSize(0),
-      m_backendPath(backendPath),
-      m_modelBinaryPath(modelBinaryPath) {
+        : m_backendLibHandle(nullptr),
+            m_systemLibHandle(nullptr),
+            m_backendHandle(nullptr),
+            m_deviceHandle(nullptr),
+            m_contextHandle(nullptr),
+            m_graphHandle(nullptr),
+            m_sysInterface(nullptr),
+            m_qnnInterface(nullptr),
+            m_inputBuffer(nullptr),
+            m_outputBuffer(nullptr),
+            m_inputBufferSize(0),
+            m_outputBufferSize(0),
+            m_backendPath(backendPath),
+            m_modelBinaryPath(modelBinaryPath),
+            m_graphName("model") {
     QNN_LOG("INFO", "Initializing QNN Runner...");
     loadBackend();
     initializeBackend();
     createDevice();
     createContext();
-    setupGraph();
     setupTensors();
+        setupGraph();
     QNN_LOG("INFO", "Runner ready.");
 }
 
@@ -118,9 +120,8 @@ void QnnRunner::createContext() {
 void QnnRunner::setupGraph() {
     QNN_LOG("INFO", "Retrieving graph handle...");
     
-    const char* graphName = "model";
-    if (m_qnnInterface->QNN_INTERFACE_VER_NAME.graphRetrieve(m_contextHandle, graphName, &m_graphHandle) != QNN_SUCCESS) {
-        throw std::runtime_error("Failed to retrieve graph 'model' from context");
+    if (m_qnnInterface->QNN_INTERFACE_VER_NAME.graphRetrieve(m_contextHandle, m_graphName.c_str(), &m_graphHandle) != QNN_SUCCESS) {
+        throw std::runtime_error("Failed to retrieve graph '" + m_graphName + "' from context");
     }
     
     QNN_LOG("INFO", "Graph handle obtained, attempting finalization...");
@@ -211,11 +212,23 @@ void QnnRunner::setupTensors() {
     }
 }
 
+void QnnRunner::updateGraphName(const char* graphName) {
+    if (graphName && graphName[0] != '\0') {
+        std::string newName(graphName);
+        if (newName != m_graphName) {
+            QNN_LOG("INFO", "Detected graph in context: " + newName);
+        }
+        m_graphName = std::move(newName);
+    }
+}
+
 bool QnnRunner::setupTensorsFromGraphInfo(const QnnSystemContext_GraphInfoV1_t& graphInfo) {
     if (!graphInfo.graphInputs || graphInfo.numGraphInputs == 0 ||
         !graphInfo.graphOutputs || graphInfo.numGraphOutputs == 0) {
         return false;
     }
+
+    updateGraphName(graphInfo.graphName);
 
     // Use first input and output tensors
     const Qnn_Tensor_t& srcInput = graphInfo.graphInputs[0];
@@ -272,6 +285,8 @@ bool QnnRunner::setupTensorsFromGraphInfoV3(const QnnSystemContext_GraphInfoV3_t
         !graphInfo.graphOutputs || graphInfo.numGraphOutputs == 0) {
         return false;
     }
+
+    updateGraphName(graphInfo.graphName);
 
     const Qnn_Tensor_t& srcInput = graphInfo.graphInputs[0];
     const Qnn_Tensor_t& srcOutput = graphInfo.graphOutputs[0];
@@ -511,8 +526,8 @@ void QnnRunner::executeBatch(const std::vector<float>& batchData, size_t batchSi
     // Determine per-sample input size (elements) assuming batch is first dimension
     uint32_t in_rank = m_inputTensor.v1.rank;
     uint32_t* in_dims = m_inputTensor.v1.dimensions;
-    size_t original_in_batch = 1;
     size_t per_sample_input = 0;
+    uint32_t original_in_batch = 0;
     if (in_rank > 0 && in_dims) {
         original_in_batch = in_dims[0];
         // product of remaining dims (if rank == 1, treat per_sample as 1)
@@ -563,8 +578,8 @@ void QnnRunner::executeBatch(const std::vector<float>& batchData, size_t batchSi
     // Prepare output buffer for batch
     uint32_t out_rank = m_outputTensor.v1.rank;
     uint32_t* out_dims = m_outputTensor.v1.dimensions;
-    size_t original_out_batch = 1;
     size_t per_sample_output = 0;
+    uint32_t original_out_batch = 0;
     if (out_rank > 0 && out_dims) {
         original_out_batch = out_dims[0];
         per_sample_output = 1;
@@ -605,6 +620,20 @@ void QnnRunner::executeBatch(const std::vector<float>& batchData, size_t batchSi
     scores.resize(required_output_size);
     for (size_t i = 0; i < required_output_size; ++i) {
         scores[i] = static_cast<float>(output_bytes[i]) * output_scale;
+    }
+
+    // Restore original batch dimensions so single-sample execute remains consistent
+    if (in_dims && original_in_batch != 0) {
+        in_dims[0] = original_in_batch;
+    }
+    if (!m_inputDims.empty() && original_in_batch != 0) {
+        m_inputDims[0] = original_in_batch;
+    }
+    if (out_dims && original_out_batch != 0) {
+        out_dims[0] = original_out_batch;
+    }
+    if (!m_outputDims.empty() && original_out_batch != 0) {
+        m_outputDims[0] = original_out_batch;
     }
 }
 

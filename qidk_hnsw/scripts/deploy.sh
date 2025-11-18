@@ -1,221 +1,81 @@
 #!/bin/bash
 set -e
 
-# Usage: ./deploy.sh [dataset_name] [model_size_suffix] [top_k]
-# Example: ./deploy.sh siftsmall 10k 5
-# Example: ./deploy.sh sift 1M 10
+DATASET_NAME=${1:-"siftsmall"}
+M=${2:-16}
+TOP_K=${3:-10}
+EF_SEARCH=${4:-50}
 
 : "${QNN_SDK_ROOT:=$HOME/qualcomm/qnn}"
 
-# Parse arguments
-DATASET_NAME=${1:-"siftsmall"}
-MODEL_SIZE_SUFFIX=${2:-""}
-TOP_K=${3:-5}
-
-# Auto-detect model size suffix if not provided
-if [ -z "$MODEL_SIZE_SUFFIX" ]; then
-    if [ "$DATASET_NAME" = "siftsmall" ]; then
-        MODEL_SIZE_SUFFIX="10k"
-    elif [ "$DATASET_NAME" = "sift" ]; then
-        MODEL_SIZE_SUFFIX="1M"
-    else
-        echo "ERROR: Unknown dataset name: $DATASET_NAME"
-        exit 1
-    fi
-fi
-
-HOST_EXE=./android/output/qidk_rag_demo
-MODEL_BIN=./qnn/qnn_artifacts/model.bin
-DATA_BIN=./android/app/src/main/assets/vector_search_${MODEL_SIZE_SUFFIX}.bin
+HOST_EXE=./android/output/qidk_rag_demo_hnsw
+HNSW_INDEX=./data/${DATASET_NAME}/${DATASET_NAME}_hnsw_M${M}.bin
+VECTORS_FILE=./data/${DATASET_NAME}/${DATASET_NAME}_base.fvecs
 QUERY_FILE=./data/${DATASET_NAME}/${DATASET_NAME}_query.fvecs
-DOC_FILE=./data/${DATASET_NAME}/${DATASET_NAME}_base.fvecs
+MODEL_ARTIFACT_DIR=./qnn/qnn_artifacts/${DATASET_NAME}
+MODEL_LIB_SO=${MODEL_ARTIFACT_DIR}/model_lib/aarch64-android/libvector_search_${DATASET_NAME}.so
+MODEL_LIB_BASENAME=$(basename "$MODEL_LIB_SO")
+CONTEXT_GENERATOR=$QNN_SDK_ROOT/bin/aarch64-android/qnn-context-binary-generator
 
 QNN_LIBS_DIR=$QNN_SDK_ROOT/lib/aarch64-android
 BUILT_LIBS_DIR=./android/app/main/libs/arm64-v8a
 
-QNN_LIBS=("libQnnHtp.so" "libQnnHtpPrepare.so" "libQnnSystem.so" "libc++_shared.so")
-OPTIONAL_LIBS=(
-    "libQnnHtpNetRunExtensions.so"
-    "libQnnHtpV73Stub.so"
-    "libQnnHtpV75Stub.so"
-    "libQnnHtpV79Stub.so"
-)
+QNN_LIBS=("libQnnHtp.so" "libQnnSystem.so" "libc++_shared.so" "libQnnHtpPrepare.so")
 
-REMOTE_DIR=/data/local/tmp/qnn-rag-demo
-REMOTE_EXE=$REMOTE_DIR/qidk_rag_demo
-REMOTE_MODEL_BIN=$REMOTE_DIR/model.bin
-REMOTE_DATA=$REMOTE_DIR/$(basename $DATA_BIN)
+REMOTE_DIR=/data/local/tmp/qnn-hnsw-demo
+REMOTE_EXE=$REMOTE_DIR/qidk_rag_demo_hnsw
+REMOTE_INDEX=$REMOTE_DIR/hnsw_index.bin
+REMOTE_VECTORS=$REMOTE_DIR/vectors.fvecs
 REMOTE_QUERY=$REMOTE_DIR/query.fvecs
-REMOTE_DOC=$REMOTE_DIR/docs.fvecs
+REMOTE_CONTEXT=$REMOTE_DIR/context.bin
 REMOTE_RESULTS_DIR=$REMOTE_DIR/results
+REMOTE_MODEL_LIB=$REMOTE_DIR/$MODEL_LIB_BASENAME
 
-LOCAL_RESULTS_DIR=./results/${DATASET_NAME}_${MODEL_SIZE_SUFFIX}
+LOCAL_RESULTS_DIR=./results/${DATASET_NAME}_M${M}_ef${EF_SEARCH}
 
-echo "=== Deploying QNN RAG Demo ==="
+echo "=== Deploying HNSW on Snapdragon NPU ==="
 echo "  Dataset: $DATASET_NAME"
-echo "  Model size: $MODEL_SIZE_SUFFIX"
-echo "  TOP_K: $TOP_K"
-echo "  Query file: $QUERY_FILE"
-echo "  Doc file: $DOC_FILE"
-echo "  Data binary: $DATA_BIN"
-echo "  Results dir: $LOCAL_RESULTS_DIR"
+echo "  HNSW M: $M, ef_search: $EF_SEARCH, top_k: $TOP_K"
+echo "  Results: $LOCAL_RESULTS_DIR"
 echo ""
 
 if ! adb devices | grep -q "device$"; then
-    echo "ERROR: No device detected. Connect via ADB."
+    echo "Error: No device detected. Connect via ADB."
     exit 1
 fi
-echo "[OK] Device connected"
 
-for f in "$HOST_EXE" "$MODEL_BIN" "$DATA_BIN" "$QUERY_FILE" "$DOC_FILE"; do
-    [ ! -f "$f" ] && echo "ERROR: Missing $f" && exit 1
-done
-
-adb shell "mkdir -p $REMOTE_DIR"
-echo "[OK] Created $REMOTE_DIR"
-
-adb push $HOST_EXE $REMOTE_EXE >/dev/null
-adb shell "chmod +x $REMOTE_EXE"
-echo "[OK] Executable pushed"
-
-adb push $MODEL_BIN $REMOTE_MODEL_BIN >/dev/null
-adb push $DATA_BIN $REMOTE_DATA >/dev/null
-adb push $QUERY_FILE $REMOTE_QUERY >/dev/null
-adb push $DOC_FILE $REMOTE_DOC >/dev/null
-echo "[OK] Model binary, query data, and document embeddings pushed"
-
-for lib in "${QNN_LIBS[@]}"; do
-    if [ -f "$QNN_LIBS_DIR/$lib" ]; then
-        adb push "$QNN_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
-    elif [ -f "$BUILT_LIBS_DIR/$lib" ]; then
-        adb push "$BUILT_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
-    else
-        echo "ERROR: Cannot find $lib"
+for f in "$HOST_EXE" "$HNSW_INDEX" "$VECTORS_FILE" "$QUERY_FILE" "$MODEL_LIB_SO" "$CONTEXT_GENERATOR"; do
+    if [ ! -f "$f" ]; then
+        echo "Error: Missing file: $f"
         exit 1
     fi
 done
 
-for lib in "${OPTIONAL_LIBS[@]}"; do
-    [ -f "$QNN_LIBS_DIR/$lib" ] && adb push "$QNN_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
-done
+echo "[1/6] Creating remote directory..."
+adb shell "mkdir -p $REMOTE_DIR" 2>/dev/null
 
-echo "Searching for NPU/Skel libs..."
-SKEL_PUSHED=false
-HEXAGON_DIRS=(
-    "$QNN_SDK_ROOT/lib/hexagon-v73/unsigned"
-    "$QNN_SDK_ROOT/lib/hexagon-v75/unsigned"  
-    "$QNN_SDK_ROOT/lib/hexagon-v79/unsigned"
-)
-ADSP_LIBS=("libQnnHtpV73Skel.so" "libQnnHtpV75Skel.so" "libQnnHtpV79Skel.so")
-
-for dir in "${HEXAGON_DIRS[@]}"; do
-    for skel in "${ADSP_LIBS[@]}"; do
-        if [ -f "$dir/$skel" ]; then
-            adb push "$dir/$skel" $REMOTE_DIR/ >/dev/null
-            echo "[OK] Pushed $skel"
-            SKEL_PUSHED=true
-        fi
-    done
-done
-
-if [ "$SKEL_PUSHED" = false ]; then
-    echo "WARNING: No Hexagon skel libraries found."
-fi
-
-adb push ./qnn/qnn_artifacts/aarch64-android/libmodel.so $REMOTE_DIR/ >/dev/null
-
-echo "--- Generating context binary on device ---"
-adb shell "cd $REMOTE_DIR && \
-           rm -rf output model_context.bin && \
-           export LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH && \
-           ./qnn-context-binary-generator --model libmodel.so --backend libQnnHtp.so --binary_file model_context 2>&1 | grep 'pid:' &"
-
-sleep 2
-
-if adb shell "[ -f $REMOTE_DIR/output/model_context.bin ]"; then
-    adb shell "cd $REMOTE_DIR && cp output/model_context.bin model_context.bin"
-    echo "[OK] Context binary generated"
-else
-    echo "WARNING: Context binary generation may have failed"
-fi
-
-echo "--- Running on device ---"
-adb shell "cd $REMOTE_DIR && \
-           export LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH && \
-           export ADSP_LIBRARY_PATH=. && \
-           ./qidk_rag_demo model_context.bin query.fvecs results libQnnHtp.so docs.fvecs $TOP_K"
-RESULT=$?
-
-if [ $RESULT -eq 0 ]; then
-    echo "[OK] Execution successful!"
-    
-    mkdir -p "$LOCAL_RESULTS_DIR"
-    
-    adb pull $REMOTE_RESULTS_DIR/results.txt "$LOCAL_RESULTS_DIR/results.txt" >/dev/null 2>&1
-    adb pull $REMOTE_RESULTS_DIR/metrics.txt "$LOCAL_RESULTS_DIR/metrics.txt" >/dev/null 2>&1
-    
-    echo "[OK] Results saved to $LOCAL_RESULTS_DIR/results.txt"
-    echo "[OK] Metrics saved to $LOCAL_RESULTS_DIR/metrics.txt"
-    
-    echo ""
-    echo "=== Performance Summary ==="
-    if [ -f "$LOCAL_RESULTS_DIR/metrics.txt" ]; then
-        grep -E "Total execution time|Throughput|Average latency" "$LOCAL_RESULTS_DIR/metrics.txt" | head -10
-    fi
-    
-    echo ""
-    echo "Full metrics: $LOCAL_RESULTS_DIR/metrics.txt"
-    echo "Full results: $LOCAL_RESULTS_DIR/results.txt"
-else
-    echo "[ERROR] Execution failed with code $RESULT"
-fi
-if ! adb devices | grep -q "device$"; then
-    echo "ERROR: No device detected. Connect via ADB."
-    exit 1
-fi
-echo "[OK] Device connected"
-
-# Validate files
-for f in "$HOST_EXE" "$MODEL_BIN" "$DATA_BIN" "$QUERY_FILE" "$DOC_FILE"; do
-    [ ! -f "$f" ] && echo "ERROR: Missing $f" && exit 1
-done
-
-# Step 1: Create remote directory
-adb shell "mkdir -p $REMOTE_DIR"
-echo "[OK] Created $REMOTE_DIR"
-
-# Step 2: Push executable
-adb push $HOST_EXE $REMOTE_EXE >/dev/null
+echo "[2/6] Pushing executable and data..."
+adb push $HOST_EXE $REMOTE_EXE >/dev/null 2>&1
 adb shell "chmod +x $REMOTE_EXE"
-echo "[OK] Executable pushed"
+adb push $HNSW_INDEX $REMOTE_INDEX >/dev/null 2>&1
+adb push $VECTORS_FILE $REMOTE_VECTORS >/dev/null 2>&1
+adb push $QUERY_FILE $REMOTE_QUERY >/dev/null 2>&1
 
-# Step 3: Push model + data
-adb push $MODEL_BIN $REMOTE_MODEL_BIN >/dev/null
-adb push $DATA_BIN $REMOTE_DATA >/dev/null
-adb push $QUERY_FILE $REMOTE_QUERY >/dev/null
-adb push $DOC_FILE $REMOTE_DOC >/dev/null
-echo "[OK] Model binary, query data, and document embeddings pushed"
+echo "[3/6] Pushing QNN model library..."
+adb push "$MODEL_LIB_SO" "$REMOTE_MODEL_LIB" >/dev/null 2>&1
+adb push "$CONTEXT_GENERATOR" $REMOTE_DIR/ >/dev/null 2>&1
+adb shell "chmod +x $REMOTE_DIR/qnn-context-binary-generator"
 
-# Step 4: Push core QNN libs
+echo "[4/6] Pushing QNN runtime libraries..."
 for lib in "${QNN_LIBS[@]}"; do
-    if [ -f "$BUILT_LIBS_DIR/$lib" ]; then
-        adb push "$BUILT_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
-    elif [ -f "$QNN_LIBS_DIR/$lib" ]; then
-        adb push "$QNN_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
-    else
-        echo "WARNING: Missing $lib"
+    if [ -f "$QNN_LIBS_DIR/$lib" ]; then
+        adb push "$QNN_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null 2>&1
+    elif [ -f "$BUILT_LIBS_DIR/$lib" ]; then
+        adb push "$BUILT_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null 2>&1
     fi
 done
 
-# Step 5: Push optional stub libs
-for lib in "${OPTIONAL_LIBS[@]}"; do
-    [ -f "$QNN_LIBS_DIR/$lib" ] && adb push "$QNN_LIBS_DIR/$lib" $REMOTE_DIR/ >/dev/null
-done
-
-# Step 6: Push DSP skeleton libs
-echo "Searching for NPU/Skel libs..."
 SKEL_PUSHED=false
-# *** FIXED: The paths in this array are now correct ***
 HEXAGON_DIRS=(
     "$QNN_SDK_ROOT/lib/hexagon-v73/unsigned"
     "$QNN_SDK_ROOT/lib/hexagon-v75/unsigned"
@@ -226,65 +86,56 @@ ADSP_LIBS=("libQnnHtpV73Skel.so" "libQnnHtpV75Skel.so" "libQnnHtpV79Skel.so")
 for dir in "${HEXAGON_DIRS[@]}"; do
     for lib in "${ADSP_LIBS[@]}"; do
         if [ -f "$dir/$lib" ]; then
-            adb push "$dir/$lib" $REMOTE_DIR/ >/dev/null
-            echo "[OK] Pushed $lib"
+            adb push "$dir/$lib" $REMOTE_DIR/ >/dev/null 2>&1
             SKEL_PUSHED=true
         fi
     done
 done
-[ "$SKEL_PUSHED" = false ] && echo "WARNING: No skeleton library found. NPU may fail."
 
-# Step 7: Generate context binary on device (with HtpPrepare lib)
-echo "--- Generating context binary on device ---"
+echo "[5/6] Generating context binary on device..."
 adb shell "cd $REMOTE_DIR && \
-    rm -rf output model_context.bin && \
-    export LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH && \
-    export ADSP_LIBRARY_PATH=. && \
-    ./qnn-context-binary-generator --model libmodel.so --backend libQnnHtp.so --binary_file model_context && \
-    cp output/model_context.bin model_context.bin 2>/dev/null || true"
+           rm -rf output context.bin && \
+           export LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH && \
+           export ADSP_LIBRARY_PATH=. && \
+           ./qnn-context-binary-generator --model $MODEL_LIB_BASENAME --backend libQnnHtp.so --binary_file context" >/dev/null 2>&1
 
-if adb shell "[ -f $REMOTE_DIR/model_context.bin ] && echo exists" | grep -q exists; then
-    echo "[OK] Context binary generated"
+if adb shell "[ -f $REMOTE_DIR/output/context.bin ]" >/dev/null 2>&1; then
+    adb shell "cd $REMOTE_DIR && cp output/context.bin context.bin"
 else
-    echo "WARNING: Context binary generation may have failed"
+    echo "Error: Failed to generate context binary on device"
+    exit 1
 fi
 
-# Step 8: Run inference
-echo "--- Running on device ---"
+echo "[6/6] Running HNSW search on NPU..."
+echo ""
+
 adb shell "cd $REMOTE_DIR && \
            export LD_LIBRARY_PATH=.:\$LD_LIBRARY_PATH && \
            export ADSP_LIBRARY_PATH=. && \
-           ./qidk_rag_demo model_context.bin query.fvecs results libQnnHtp.so docs.fvecs $TOP_K"
+           export ADSP_LIBRARY_PATH_64=. && \
+           ./qidk_rag_demo_hnsw hnsw_index.bin vectors.fvecs query.fvecs results context.bin libQnnHtp.so $TOP_K $EF_SEARCH"
 RESULT=$?
 
-# Step 8: Results
 if [ $RESULT -eq 0 ]; then
-    echo "[OK] Execution successful!"
+    echo ""
+    echo "=== Search Completed Successfully ==="
     
     mkdir -p "$LOCAL_RESULTS_DIR"
     
     adb pull $REMOTE_RESULTS_DIR/results.txt "$LOCAL_RESULTS_DIR/results.txt" >/dev/null 2>&1
     adb pull $REMOTE_RESULTS_DIR/metrics.txt "$LOCAL_RESULTS_DIR/metrics.txt" >/dev/null 2>&1
     
-    echo "[OK] Results saved to $LOCAL_RESULTS_DIR/results.txt"
-    echo "[OK] Metrics saved to $LOCAL_RESULTS_DIR/metrics.txt"
-    
-    echo ""
-    echo "=== Performance Summary ==="
     if [ -f "$LOCAL_RESULTS_DIR/metrics.txt" ]; then
-        grep -E "Total execution time|Throughput|Average latency" "$LOCAL_RESULTS_DIR/metrics.txt" | head -10
+        echo ""
+        cat "$LOCAL_RESULTS_DIR/metrics.txt"
+        echo ""
+        echo "Full results saved to: $LOCAL_RESULTS_DIR/"
     fi
-    
-    echo ""
-    echo "Full metrics: $LOCAL_RESULTS_DIR/metrics.txt"
-    echo "Full results: $LOCAL_RESULTS_DIR/results.txt"
-    echo "Remote dir: $REMOTE_DIR"
-    echo "Clean up: adb shell rm -rf $REMOTE_DIR"
 else
-    echo "[ERROR] Execution failed (code $RESULT)"
-    echo "Debug:"
-    echo "  adb logcat | grep -i qnn"
-    echo "  Try CPU backend: libQnnCpu.so"
-    echo "  adb shell ls -la $REMOTE_DIR"
+    echo ""
+    echo "Error: Search failed with exit code $RESULT"
     exit 1
 fi
+
+echo ""
+echo "Cleanup device: adb shell rm -rf $REMOTE_DIR"

@@ -34,6 +34,7 @@ private:
     bool setupTensorsFromGraphInfoV3(const QnnSystemContext_GraphInfoV3_t& graphInfo);
     bool deepCopyTensorInfo(Qnn_Tensor_t* dst, const Qnn_Tensor_t* src);
     size_t calculateTensorSize(const Qnn_Tensor_t* tensor);
+    void updateGraphName(const char* graphName);
     void cleanup();
 
     void* m_backendLibHandle;
@@ -60,6 +61,7 @@ private:
 
     std::string m_backendPath;
     std::string m_modelBinaryPath;
+    std::string m_graphName;
 };
 
 #endif // QNNRUNNER_H
