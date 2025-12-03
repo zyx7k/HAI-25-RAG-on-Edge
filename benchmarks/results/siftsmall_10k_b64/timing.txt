@@ -1,0 +1,17 @@
+=== Deploy Timing Breakdown ===
+Date: Wed Dec  3 19:29:38 IST 2025
+Dataset: siftsmall
+Model size: 10k
+Batch size: 64
+
+Push executable:     59.066719000 ms
+Push model binary:   38.592483000 ms
+Push data binary:    31.841366000 ms
+Push query file:     15.516022000 ms
+Push doc file:       62.936835000 ms
+Push QNN libs:       739.630112000 ms
+Context generation:  587.760383000 ms
+Benchmark execution: 393.330896000 ms
+Pull results:        31.351439000 ms
+---------------------------------
+TOTAL DEPLOY TIME:   2042.443239000 ms

@@ -1,0 +1,3 @@
+dataset,batch_size,throughput_qps,avg_gflops,npu_time_pct,cpu_time_pct,context_gen_sec
+siftsmall,1,1033.185708,2.704169,97.810292,0.746214,0
+siftsmall,8,5620.855848,25.756211,58.102360,41.539586,0

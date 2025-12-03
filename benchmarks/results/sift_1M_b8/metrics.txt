@@ -1,0 +1,57 @@
+=== QNN RAG Demo Performance Metrics (Batched) ===
+
+Dataset Information:
+  Number of queries: 10000
+  Number of documents: 1000000
+  Dimension: 128
+  Batch size: 8
+  Number of batches: 1250
+  Top-K: 5
+
+Operational Intensity Analysis:
+  FLOPs per batch: 2.048000e+09
+  Bytes moved per batch: 136001024.000000
+    - Query input: 1024.000000 bytes
+    - Doc matrix (reused!): 128000000.000000 bytes
+    - Output scores: 8000000.000000 bytes
+  Operational Intensity: 15.058710 FLOPs/byte
+  OI improvement vs batch=1: 7.588186x
+
+Overall Performance:
+  Total execution time: 84.447881 s
+  Throughput: 118.416233 queries/sec
+
+NPU Execution (per batch):
+  Avg quantization time: 0.002582 ms
+  Avg graph execute time: 26.304587 ms
+  Avg total NPU time: 26.310370 ms
+  Std deviation (graph exec): 2.728607 ms
+  Min graph exec time: 10.847500 ms
+  Max graph exec time: 33.297187 ms
+  P50 graph exec time: 26.915469 ms
+  P95 graph exec time: 29.231041 ms
+  P99 graph exec time: 30.616615 ms
+
+NPU Performance (per batch):
+  Avg GFLOPS: 77.857143
+  Max GFLOPS: 188.799263
+  Min GFLOPS: 61.506697
+
+Per-Query Amortized Performance:
+  Avg NPU time per query: 3.288796 ms
+  Avg graph exec per query: 3.288073 ms
+  Avg CPU (top-K) per query: 5.148685 ms
+  Avg total per query: 8.444788 ms
+  Effective GFLOPS per query: 77.857143
+
+CPU Post-processing (Heapify + Top-K per batch):
+  Total CPU time: 51.486849 s
+  Avg per batch: 41.189479 ms
+  Min per batch: 6.080469 ms
+  Max per batch: 54.885313 ms
+
+Time Breakdown (% of end-to-end):
+  Pure NPU (graphExecute): 38.936127%
+  Quantization (CPU):      0.003822%
+  Heap + Top-K (CPU):      60.968787%
+  Other overhead:          0.091264%

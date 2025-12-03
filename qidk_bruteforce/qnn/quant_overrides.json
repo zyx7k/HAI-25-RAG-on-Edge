@@ -1,12 +1,12 @@
 {
     "inputs": {
         "query": {
-            "data_type": "float"
+            "data_type": "uint8"
         }
     },
     "outputs": {
         "scores": {
-            "data_type": "float"
+            "data_type": "uint8"
         }
     },
     "param_encodings": {},

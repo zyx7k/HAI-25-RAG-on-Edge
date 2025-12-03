@@ -9,7 +9,7 @@
       "htp_options": {
         "use_fold_relu": "true",
         "use_multi_contexts": "true",
-        "precision": "fp16",
+        "precision": "int8",
         "vtcm_mb": "8"
       }
     }

@@ -1,9 +1,10 @@
 #!/bin/bash
 set -e
 
-# Usage: ./build.sh [dataset_name] [model_size_suffix]
+# Usage: ./build.sh [dataset_name] [model_size_suffix] [batch_size]
 # Example: ./build.sh siftsmall 10k
 # Example: ./build.sh sift 1M
+# Example: ./build.sh sift 1M 32   # Batch size 32
 
 # --- CONFIGURATION ---
 : "${ANDROID_NDK_ROOT:=$HOME/Android/Sdk/ndk/25.2.9519653}"
@@ -12,6 +13,7 @@ set -e
 # Parse arguments
 DATASET_NAME=${1:-"siftsmall"}
 MODEL_SIZE_SUFFIX=${2:-""}
+BATCH_SIZE=${3:-1}
 
 # Auto-detect model size suffix if not provided
 if [ -z "$MODEL_SIZE_SUFFIX" ]; then
@@ -25,9 +27,17 @@ if [ -z "$MODEL_SIZE_SUFFIX" ]; then
     fi
 fi
 
+# Determine model filename based on batch size
+if [ "$BATCH_SIZE" -gt 1 ]; then
+    MODEL_SUFFIX="${MODEL_SIZE_SUFFIX}_b${BATCH_SIZE}"
+else
+    MODEL_SUFFIX="${MODEL_SIZE_SUFFIX}"
+fi
+
 echo "=== Building QNN RAG Demo ==="
 echo "  Dataset: $DATASET_NAME"
 echo "  Model size: $MODEL_SIZE_SUFFIX"
+echo "  Batch size: $BATCH_SIZE"
 echo ""
 # --- END CONFIGURATION ---
 
@@ -72,11 +82,11 @@ pip install -q -r requirements.txt 2>&1 | grep -v "WARNING" || true
 # Data and model preparation
 echo "--- Running Data/Model Prep Scripts ---"
 echo "Skipping data download. Using local files in data/."
-python3 prepare/create_model.py $DATASET_NAME
+python3 prepare/create_model.py $DATASET_NAME -1 $BATCH_SIZE
 
 # Convert model to QNN format
 echo "--- Running QNN Conversion ---"
-bash qnn/convert_to_qnn.sh $DATASET_NAME $MODEL_SIZE_SUFFIX
+bash qnn/convert_to_qnn.sh $DATASET_NAME $MODEL_SIZE_SUFFIX $BATCH_SIZE
 
 # Build C++ executable
 echo "--- Building C++ Host Executable ---"
@@ -93,4 +103,4 @@ cp android/app/main/libs/arm64-v8a/qidk_rag_demo android/output/
 
 echo "--- Build Complete ---"
 echo "Executable: android/output/qidk_rag_demo"
-echo "Model binary: android/app/src/main/assets/vector_search_${MODEL_SIZE_SUFFIX}.bin"
+echo "Model binary: android/app/src/main/assets/vector_search_${MODEL_SUFFIX}.bin"

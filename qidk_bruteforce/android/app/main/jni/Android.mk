@@ -30,7 +30,7 @@ LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)
 
 LOCAL_LDFLAGS += -fPIE -pie
-LOCAL_LDLIBS += -ldl -llog
+LOCAL_LDLIBS += -ldl -llog -pthread
 LOCAL_SHARED_LIBRARIES := libQnnSystem libQnnHtp
 
 include $(BUILD_EXECUTABLE)

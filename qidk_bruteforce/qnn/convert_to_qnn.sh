@@ -1,19 +1,22 @@
 #!/bin/bash
 set -e
 
-# Usage: ./convert_to_qnn.sh <dataset_name> [model_size_suffix]
+# Usage: ./convert_to_qnn.sh <dataset_name> [model_size_suffix] [batch_size]
 # Example: ./convert_to_qnn.sh siftsmall 10k
 # Example: ./convert_to_qnn.sh sift 1M
+# Example: ./convert_to_qnn.sh sift 1M 32   # Batch size 32
 
 if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <dataset_name> [model_size_suffix]"
+    echo "Usage: $0 <dataset_name> [model_size_suffix] [batch_size]"
     echo "  dataset_name: 'siftsmall' or 'sift'"
     echo "  model_size_suffix: optional, e.g., '10k', '1M' (defaults to auto-detect)"
+    echo "  batch_size: optional, number of queries per batch (default 1)"
     exit 1
 fi
 
 DATASET_NAME=$1
 MODEL_SIZE_SUFFIX=${2:-""}
+BATCH_SIZE=${3:-1}
 
 # Resolve absolute project root (so script works from anywhere)
 PROJECT_ROOT=$(realpath "$(dirname "$0")/..")
@@ -31,15 +34,21 @@ if [ -z "$MODEL_SIZE_SUFFIX" ]; then
     fi
 fi
 
-# --- Configuration ---
-ONNX_MODEL="models/vector_search_${MODEL_SIZE_SUFFIX}.onnx"
+# Determine model filename based on batch size
+if [ "$BATCH_SIZE" -gt 1 ]; then
+    ONNX_MODEL="models/vector_search_${MODEL_SIZE_SUFFIX}_b${BATCH_SIZE}.onnx"
+    FINAL_OUTPUT_BIN="android/app/src/main/assets/vector_search_${MODEL_SIZE_SUFFIX}_b${BATCH_SIZE}.bin"
+else
+    ONNX_MODEL="models/vector_search_${MODEL_SIZE_SUFFIX}.onnx"
+    FINAL_OUTPUT_BIN="android/app/src/main/assets/vector_search_${MODEL_SIZE_SUFFIX}.bin"
+fi
+
 QUERY_DATA_FILE="data/${DATASET_NAME}/${DATASET_NAME}_query.fvecs"
-FINAL_OUTPUT_BIN="android/app/src/main/assets/vector_search_${MODEL_SIZE_SUFFIX}.bin"
-# --- End Configuration ---
 
 echo "=== QNN Conversion for ${DATASET_NAME} dataset ==="
 echo "  Model: $ONNX_MODEL"
 echo "  Query data: $QUERY_DATA_FILE"
+echo "  Batch size: $BATCH_SIZE"
 echo "  Output: $FINAL_OUTPUT_BIN"
 echo ""
 
@@ -91,6 +100,7 @@ import numpy as np, os
 QUERY_FILE = "$QUERY_DATA_FILE"
 RAW_DIR = "./qnn/raw_inputs"
 LIST_FILE = "./qnn/input_list.txt"
+BATCH_SIZE = $BATCH_SIZE
 
 def read_fvecs(filename, count=-1):
     with open(filename, 'rb') as f:
@@ -111,13 +121,25 @@ def read_fvecs(filename, count=-1):
 
 queries = read_fvecs(QUERY_FILE)
 os.makedirs(RAW_DIR, exist_ok=True)
-with open(LIST_FILE, 'w') as f:
-    for i, q in enumerate(queries):
-        path = f"{RAW_DIR}/query_{i}.raw"
-        q.astype('float32').tofile(path)
-        f.write(f"query:={path}\n")
 
-print(f"Wrote {len(queries)} raw queries (dim={queries.shape[1]}) to {RAW_DIR}")
+if BATCH_SIZE == 1:
+    # Single query mode - each sample is one query
+    with open(LIST_FILE, 'w') as f:
+        for i, q in enumerate(queries):
+            path = f"{RAW_DIR}/query_{i}.raw"
+            q.astype('float32').tofile(path)
+            f.write(f"query:={path}\n")
+    print(f"Wrote {len(queries)} raw queries (dim={queries.shape[1]}) to {RAW_DIR}")
+else:
+    # Batched mode - each sample is BATCH_SIZE queries concatenated
+    num_batches = len(queries) // BATCH_SIZE
+    with open(LIST_FILE, 'w') as f:
+        for i in range(num_batches):
+            batch = queries[i*BATCH_SIZE : (i+1)*BATCH_SIZE]
+            path = f"{RAW_DIR}/batch_{i}.raw"
+            batch.astype('float32').tofile(path)
+            f.write(f"query:={path}\n")
+    print(f"Wrote {num_batches} batched samples (batch_size={BATCH_SIZE}, dim={queries.shape[1]}) to {RAW_DIR}")
 PYCODE
 
 # --- Step 1: Convert ONNX to intermediate QNN format ---

@@ -5,8 +5,54 @@
 #include <cmath>
 #include <dlfcn.h>
 #include <vector>
+#include <chrono>
+#include <arm_neon.h>
 
 #define QNN_LOG(level, msg) std::cout << "[QNN " << level << "] " << msg << std::endl
+
+static void quantize_buffer_neon(const float* src, uint8_t* dst, size_t count, float inv_scale) {
+    size_t i = 0;
+    // Process 16 elements at a time
+    for (; i + 15 < count; i += 16) {
+        float32x4_t v0 = vld1q_f32(src + i);
+        float32x4_t v1 = vld1q_f32(src + i + 4);
+        float32x4_t v2 = vld1q_f32(src + i + 8);
+        float32x4_t v3 = vld1q_f32(src + i + 12);
+
+        // Multiply by inv_scale
+        v0 = vmulq_n_f32(v0, inv_scale);
+        v1 = vmulq_n_f32(v1, inv_scale);
+        v2 = vmulq_n_f32(v2, inv_scale);
+        v3 = vmulq_n_f32(v3, inv_scale);
+
+        // Add 0.5f for rounding
+        v0 = vaddq_f32(v0, vdupq_n_f32(0.5f));
+        v1 = vaddq_f32(v1, vdupq_n_f32(0.5f));
+        v2 = vaddq_f32(v2, vdupq_n_f32(0.5f));
+        v3 = vaddq_f32(v3, vdupq_n_f32(0.5f));
+
+        // Convert to int32
+        int32x4_t i0 = vcvtq_s32_f32(v0);
+        int32x4_t i1 = vcvtq_s32_f32(v1);
+        int32x4_t i2 = vcvtq_s32_f32(v2);
+        int32x4_t i3 = vcvtq_s32_f32(v3);
+
+        // Pack to int16 (saturating)
+        int16x8_t s0 = vqmovn_high_s32(vqmovn_s32(i0), i1);
+        int16x8_t s1 = vqmovn_high_s32(vqmovn_s32(i2), i3);
+
+        // Pack to uint8 (saturating)
+        uint8x16_t b = vqmovun_high_s16(vqmovun_s16(s0), s1);
+
+        vst1q_u8(dst + i, b);
+    }
+
+    // Handle remaining
+    for (; i < count; i++) {
+        int32_t quantized = static_cast<int32_t>(src[i] * inv_scale + 0.5f);
+        dst[i] = static_cast<uint8_t>(quantized < 0 ? 0 : (quantized > 255 ? 255 : quantized));
+    }
+}
 
 QnnRunner::QnnRunner(const std::string& modelBinaryPath, const std::string& backendPath)
     : m_backendLibHandle(nullptr),
@@ -21,6 +67,8 @@ QnnRunner::QnnRunner(const std::string& modelBinaryPath, const std::string& back
       m_outputBuffer(nullptr),
       m_inputBufferSize(0),
       m_outputBufferSize(0),
+      m_inputScale(0.6627451f),
+      m_outputScale(1013.4312f),
       m_backendPath(backendPath),
       m_modelBinaryPath(modelBinaryPath) {
     QNN_LOG("INFO", "Initializing QNN Runner...");
@@ -254,10 +302,18 @@ bool QnnRunner::setupTensorsFromGraphInfo(const QnnSystemContext_GraphInfoV1_t& 
     if (m_inputTensor.version == QNN_TENSOR_VERSION_1 && m_inputTensor.v1.dimensions) {
         m_inputDims.assign(m_inputTensor.v1.dimensions, 
                           m_inputTensor.v1.dimensions + m_inputTensor.v1.rank);
+        // Cache input quantization scale
+        if (m_inputTensor.v1.quantizeParams.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET) {
+            m_inputScale = m_inputTensor.v1.quantizeParams.scaleOffsetEncoding.scale;
+        }
     }
     if (m_outputTensor.version == QNN_TENSOR_VERSION_1 && m_outputTensor.v1.dimensions) {
         m_outputDims.assign(m_outputTensor.v1.dimensions,
                            m_outputTensor.v1.dimensions + m_outputTensor.v1.rank);
+        // Cache output quantization scale
+        if (m_outputTensor.v1.quantizeParams.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET) {
+            m_outputScale = m_outputTensor.v1.quantizeParams.scaleOffsetEncoding.scale;
+        }
     }
 
     QNN_LOG("INFO", "Input: " + std::to_string(m_inputBufferSize) + " bytes, Output: " + 
@@ -305,10 +361,18 @@ bool QnnRunner::setupTensorsFromGraphInfoV3(const QnnSystemContext_GraphInfoV3_t
     if (m_inputTensor.version == QNN_TENSOR_VERSION_1 && m_inputTensor.v1.dimensions) {
         m_inputDims.assign(m_inputTensor.v1.dimensions, 
                           m_inputTensor.v1.dimensions + m_inputTensor.v1.rank);
+        // Cache input quantization scale
+        if (m_inputTensor.v1.quantizeParams.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET) {
+            m_inputScale = m_inputTensor.v1.quantizeParams.scaleOffsetEncoding.scale;
+        }
     }
     if (m_outputTensor.version == QNN_TENSOR_VERSION_1 && m_outputTensor.v1.dimensions) {
         m_outputDims.assign(m_outputTensor.v1.dimensions,
                            m_outputTensor.v1.dimensions + m_outputTensor.v1.rank);
+        // Cache output quantization scale
+        if (m_outputTensor.v1.quantizeParams.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET) {
+            m_outputScale = m_outputTensor.v1.quantizeParams.scaleOffsetEncoding.scale;
+        }
     }
 
     QNN_LOG("INFO", "Input: " + std::to_string(m_inputBufferSize) + " bytes, Output: " + 
@@ -451,53 +515,127 @@ void QnnRunner::setupTensorsManual() {
     QNN_LOG("INFO", "Input: [1, 128] UFIXED_POINT_8 (128 bytes)");
     QNN_LOG("INFO", "Output: [1, 10000] UFIXED_POINT_8 (10000 bytes)");
     QNN_LOG("INFO", "Manual tensors configured.");
+    
+    // Cache quantization parameters
+    m_inputScale = 0.6627451181411743f;
+    m_outputScale = 1013.4312133789062500f;
 }
 
 void QnnRunner::execute(const std::vector<float>& query, std::vector<float>& scores) {
-    // Get quantization parameters and expected size from tensor
-    float input_scale = 0.6627451f;
-    float output_scale = 1013.4312f;
-    size_t expected_input_size = 128;
-    size_t expected_output_size = 10000;
+    ExecutionTiming timing;
+    execute(query, scores, timing);
+}
+
+void QnnRunner::execute(const std::vector<float>& query, std::vector<float>& scores, ExecutionTiming& timing) {
+    auto total_start = std::chrono::high_resolution_clock::now();
     
-    if (m_inputTensor.version == QNN_TENSOR_VERSION_1) {
-        if (m_inputTensor.v1.quantizeParams.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET) {
-            input_scale = m_inputTensor.v1.quantizeParams.scaleOffsetEncoding.scale;
-        }
-        expected_input_size = calculateTensorSize(&m_inputTensor);
-    }
-    
-    if (m_outputTensor.version == QNN_TENSOR_VERSION_1) {
-        if (m_outputTensor.v1.quantizeParams.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET) {
-            output_scale = m_outputTensor.v1.quantizeParams.scaleOffsetEncoding.scale;
-        }
-        expected_output_size = calculateTensorSize(&m_outputTensor);
-    }
+    // Use cached sizes
+    size_t expected_input_size = m_inputBufferSize;
+    size_t expected_output_size = m_outputBufferSize;
     
     if (query.size() != expected_input_size) {
         throw std::runtime_error("Query size mismatch: expected " + std::to_string(expected_input_size) + 
                                  ", got " + std::to_string(query.size()));
     }
 
-    // Quantize: UFIXED_POINT_8
+    // Quantize: UFIXED_POINT_8 (optimized with NEON)
+    auto quant_start = std::chrono::high_resolution_clock::now();
     uint8_t* input_bytes = static_cast<uint8_t*>(m_inputBuffer);
-    for (size_t i = 0; i < query.size(); i++) {
-        int32_t quantized = static_cast<int32_t>(std::round(query[i] / input_scale));
-        quantized = std::max(0, std::min(255, quantized));
-        input_bytes[i] = static_cast<uint8_t>(quantized);
-    }
+    const float inv_scale = 1.0f / m_inputScale;
+    quantize_buffer_neon(query.data(), input_bytes, query.size(), inv_scale);
+    auto quant_end = std::chrono::high_resolution_clock::now();
+    timing.quantize_ms = std::chrono::duration<double, std::milli>(quant_end - quant_start).count();
 
-    // Execute
+    // Execute on NPU
+    auto exec_start = std::chrono::high_resolution_clock::now();
     if (m_qnnInterface->QNN_INTERFACE_VER_NAME.graphExecute(
             m_graphHandle, &m_inputTensor, 1, &m_outputTensor, 1, nullptr, nullptr) != QNN_SUCCESS)
         throw std::runtime_error("QnnGraph_execute failed");
+    auto exec_end = std::chrono::high_resolution_clock::now();
+    timing.graph_execute_ms = std::chrono::duration<double, std::milli>(exec_end - exec_start).count();
 
     // Dequantize
+    auto dequant_start = std::chrono::high_resolution_clock::now();
     uint8_t* output_bytes = static_cast<uint8_t*>(m_outputBuffer);
     scores.resize(expected_output_size);
     for (size_t i = 0; i < expected_output_size; i++) {
-        scores[i] = static_cast<float>(output_bytes[i]) * output_scale;
+        scores[i] = static_cast<float>(output_bytes[i]) * m_outputScale;
     }
+    auto dequant_end = std::chrono::high_resolution_clock::now();
+    timing.dequantize_ms = std::chrono::duration<double, std::milli>(dequant_end - dequant_start).count();
+    
+    auto total_end = std::chrono::high_resolution_clock::now();
+    timing.total_ms = std::chrono::duration<double, std::milli>(total_end - total_start).count();
+}
+
+// Optimized execution: skip dequantization, work directly on INT8
+void QnnRunner::executeRaw(const std::vector<float>& query, ExecutionTiming& timing) {
+    auto total_start = std::chrono::high_resolution_clock::now();
+    
+    size_t expected_input_size = m_inputBufferSize;
+    
+    if (query.size() != expected_input_size) {
+        throw std::runtime_error("Query size mismatch: expected " + std::to_string(expected_input_size) + 
+                                 ", got " + std::to_string(query.size()));
+    }
+
+    // Quantize: UFIXED_POINT_8 (optimized with NEON)
+    auto quant_start = std::chrono::high_resolution_clock::now();
+    uint8_t* input_bytes = static_cast<uint8_t*>(m_inputBuffer);
+    const float inv_scale = 1.0f / m_inputScale;
+    quantize_buffer_neon(query.data(), input_bytes, query.size(), inv_scale);
+    auto quant_end = std::chrono::high_resolution_clock::now();
+    timing.quantize_ms = std::chrono::duration<double, std::milli>(quant_end - quant_start).count();
+
+    // Execute on NPU
+    auto exec_start = std::chrono::high_resolution_clock::now();
+    if (m_qnnInterface->QNN_INTERFACE_VER_NAME.graphExecute(
+            m_graphHandle, &m_inputTensor, 1, &m_outputTensor, 1, nullptr, nullptr) != QNN_SUCCESS)
+        throw std::runtime_error("QnnGraph_execute failed");
+    auto exec_end = std::chrono::high_resolution_clock::now();
+    timing.graph_execute_ms = std::chrono::duration<double, std::milli>(exec_end - exec_start).count();
+
+    // NO dequantization - caller will use getRawOutputBuffer()
+    timing.dequantize_ms = 0.0;
+    
+    auto total_end = std::chrono::high_resolution_clock::now();
+    timing.total_ms = std::chrono::duration<double, std::milli>(total_end - total_start).count();
+}
+
+// Batched execution: process multiple queries at once
+void QnnRunner::executeBatchRaw(const std::vector<float>& batch_queries, ExecutionTiming& timing) {
+    auto total_start = std::chrono::high_resolution_clock::now();
+    
+    size_t expected_input_size = m_inputBufferSize;
+    
+    if (batch_queries.size() != expected_input_size) {
+        throw std::runtime_error("Batch query size mismatch: expected " + std::to_string(expected_input_size) + 
+                                 ", got " + std::to_string(batch_queries.size()));
+    }
+
+    // Quantize entire batch: UFIXED_POINT_8 (optimized with NEON)
+    auto quant_start = std::chrono::high_resolution_clock::now();
+    uint8_t* input_bytes = static_cast<uint8_t*>(m_inputBuffer);
+    const float inv_scale = 1.0f / m_inputScale;
+    
+    quantize_buffer_neon(batch_queries.data(), input_bytes, batch_queries.size(), inv_scale);
+    
+    auto quant_end = std::chrono::high_resolution_clock::now();
+    timing.quantize_ms = std::chrono::duration<double, std::milli>(quant_end - quant_start).count();
+
+    // Execute on NPU - single call for entire batch
+    auto exec_start = std::chrono::high_resolution_clock::now();
+    if (m_qnnInterface->QNN_INTERFACE_VER_NAME.graphExecute(
+            m_graphHandle, &m_inputTensor, 1, &m_outputTensor, 1, nullptr, nullptr) != QNN_SUCCESS)
+        throw std::runtime_error("QnnGraph_execute failed (batch)");
+    auto exec_end = std::chrono::high_resolution_clock::now();
+    timing.graph_execute_ms = std::chrono::duration<double, std::milli>(exec_end - exec_start).count();
+
+    // NO dequantization - caller will use getRawOutputBuffer()
+    timing.dequantize_ms = 0.0;
+    
+    auto total_end = std::chrono::high_resolution_clock::now();
+    timing.total_ms = std::chrono::duration<double, std::milli>(total_end - total_start).count();
 }
 
 void QnnRunner::cleanup() {
