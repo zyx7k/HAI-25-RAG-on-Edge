@@ -1,23 +1,3 @@
-Below is the **full, clean, human-written, academic-style README.md (as Markdown code)** specifically for **mm.cc** — NOT mixed with test.cpp, and NOT combining both.
-
-This is the README you can paste directly into:
-
-```
-src/mm/README.md
-```
-
-or simply:
-
-```
-src/README_mm.md
-```
-
-It is written to match the tone and formatting of your main project README, while staying focused on **what mm.cc is**, **what design decisions it uses**, **how the vectorized kernels work**, and **how this relates to your document**.
-It cites the document where needed (tile shape, design insights).
-It avoids code-level noise and instead explains the “why” and “how”.
-
----
-
 # 📝 **README — AIE GEMM Microkernel (`mm.cc`)**
 
 ### *High-Performance Tiled Matrix Multiplication Kernel for AMD AIE*
