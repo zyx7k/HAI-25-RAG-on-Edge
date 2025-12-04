@@ -74,5 +74,3 @@ python3 array.py
 
 3. Compile host code:
 
-g++ test.cpp -o run.out -lxrt_coreutil -O3
-
