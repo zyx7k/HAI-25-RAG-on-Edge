@@ -232,5 +232,19 @@ C_output.bin
 timing statistics
 optional trace file
 ```
+```
+make clean
+make M=128 K=128 N=10240 m=32 k=64 n=64
+export XRT_HACK_UNSECURE_LOADING_XCLBIN=1
 
+for i in {1..100}; do
+  ./whole_array.exe \
+    -x build/final_128x128x10240_32x64x64_4c.xclbin \
+    -i build/insts_128x128x10240_32x64x64_4c.txt \
+    -k MLIR_AIE \
+    -M 128 -K 128 -N 10240 \
+    --b_col_maj 0 \
+    --warmup 2 --iters 1 --verify 0
+done | tee timings_raw.txt
+```
 ---
