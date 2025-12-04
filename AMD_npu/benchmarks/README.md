@@ -45,19 +45,6 @@ This file should be read to understand the complete engineering process.
 
 ---
 
-## Key Results
-
-### CPU Baseline
-- ~226,000 µs
-- ~0.04 GFLOPS
-
-### AIE Kernel
-- 3,100–3,900 µs
-- 2.1–3.3 GFLOPS
-
-### Speedup
-Approx. **78× – 100×** improvement over CPU.
-
 ---
 
 ## Notes on Accuracy Evaluation
