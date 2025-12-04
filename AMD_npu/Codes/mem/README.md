@@ -203,8 +203,6 @@ mm.cc
 │     matmul_i16_i32()
 │     matmul_bf16_f32()
 │     ...
-│
-└── Zero kernels and utility includes
 ```
 
 ---
