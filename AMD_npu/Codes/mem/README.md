@@ -56,7 +56,7 @@ Used for:
 
 ### **2. Vectorized 2×2 Tile Expansion (`matmul_vectorized_2x2_mmul`)**
 
-This is the default and most relevant kernel for your project.
+This is the default and most relevant kernel for the project.
 
 It expands:
 
@@ -70,7 +70,7 @@ This improves:
 * Accumulator efficiency
 * SIMD utilization
 
-This corresponds to the **32×64×64 tile** used in your architecture design.
+This corresponds to the **32×64×64 tile** used in the architecture design.
 
 ---
 
@@ -136,7 +136,7 @@ b_row_maj (input B)
 c_row_maj (output C)
 ```
 
-Matching your documented issue:
+Matching the documented issue:
 **Hardware stores tiles in column-major internally, but the reorder logic reconstructs row-major on host.**
 
 ---
@@ -168,7 +168,7 @@ These are called by:
 
 * MLIR-AIE runtime
 * XRT kernel dispatch
-* Your `test.cpp` host code
+* the `test.cpp` host code
 
 Every function expands to one of the vectorized templates based on datatype and tile size.
 
