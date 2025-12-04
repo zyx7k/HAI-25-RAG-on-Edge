@@ -72,9 +72,6 @@ DRAM → SHIM → L2 → L1 → AIE compute → DMA → Host buffer
    * from column-major
    * to global row-major (M × N matrix)
 
-9. **Verification (optional)**
-   Uses either full verification or stochastic sampling depending on matrix size.
-   Tolerances are automatically chosen based on datatype.
 
 10. **Performance reporting**
     Prints:
@@ -119,7 +116,7 @@ Used in the PDF performance report.
 
 ---
 
-## **4. Output Reordering Logic (Important)**
+## **4. Output Reordering Logic**
 
 The most critical part of `test.cpp` is reconstructing the flattened matrix from AIE’s tile-streamed output.
 
