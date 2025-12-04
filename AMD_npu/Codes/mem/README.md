@@ -1,10 +1,10 @@
-# 📝 **README — AIE GEMM Microkernel (`mm.cc`)**
+# **README — AIE GEMM Microkernel (`mm.cc`)**
 
 ### *High-Performance Tiled Matrix Multiplication Kernel for AMD AIE*
 
 ---
 
-## **📌 Overview**
+## **Overview**
 
 `mm.cc` implements the **core compute microkernel** used inside the AIE array for performing high-performance matrix multiplication. It defines multiple **scalar** and **vectorized** GEMM kernels using the **AIE API (`aie::mmul`)**, supporting different data types and tiling configurations.
 
@@ -20,7 +20,7 @@ They are optimized to achieve high compute utilization while fitting into AIE L1
 
 ---
 
-## **📐 Relationship to the Architecture**
+## **Relationship to the Architecture**
 
 From the project design document :
 
@@ -34,7 +34,7 @@ From the project design document :
 
 ---
 
-## **⚙️ Kernel Variants Implemented**
+## **Kernel Variants Implemented**
 
 The file defines multiple GEMM microkernels:
 
@@ -93,7 +93,7 @@ These kernels improve throughput when accumulator pressure is high (especially f
 
 ---
 
-## **🧱 Key Kernel Concepts**
+## **Key Kernel Concepts**
 
 ### **✔ Tiling and Shapes**
 
@@ -127,7 +127,7 @@ This allows full K-dimension reductions.
 
 ---
 
-### **✔ Row-major / Column-major Handling**
+### **Row-major / Column-major Handling**
 
 The kernel supports both:
 
@@ -152,7 +152,7 @@ This prevents illegal tile configurations.
 
 ---
 
-## **🧩 Exported C Functions (Extern “C”)**
+## **Exported C Functions (Extern “C”)**
 
 The bottom section auto-generates C-callable functions such as:
 
@@ -174,7 +174,7 @@ Every function expands to one of the vectorized templates based on datatype and 
 
 ---
 
-## **📚 Why This Kernel Matters for the Project**
+## **Why This Kernel Matters for the Project**
 
 From the architecture document:
 You chose the **32×64×64 tile size** because it was the Pareto-optimal point considering:
@@ -196,7 +196,7 @@ This file **is the core of the entire accelerator**.
 
 ---
 
-## **📦 File Structure Summary**
+## **File Structure Summary**
 
 ```
 mm.cc
@@ -216,30 +216,3 @@ mm.cc
 ```
 
 ---
-
-## **📝 Notes for Users**
-
-* `mm.cc` is **not meant to be modified frequently** — MLIR-AIE controls most of the integration.
-* Ensure **DIM_M, DIM_K, DIM_N** are divisible by kernel tile sizes.
-* Make sure row/column-major flags match your host-side reorder logic.
-* For debugging, scalar kernels are helpful.
-* For performance, always use vectorized kernels.
-
----
-
-## **🔚 Summary**
-
-This microkernel implements the compute portion of your AIE-accelerated GEMM. Combined with the tile streaming hierarchy described in the design document , it forms the core of your high-performance vector retrieval pipeline.
-
-It is highly optimized, datatype-aware, tile-aware, and designed to match the exact memory, alignment, and compute constraints of AMD AIE hardware.
-
----
-
-If you want, I can also generate:
-
-* **README for `test.cpp`** (similar style)
-* **README for `array.py`**
-* **README for `preprocessing/` folder**
-* **A unified `/src/README.md`** referencing all components
-
-Just say *“give me the README for test.cpp”*.
