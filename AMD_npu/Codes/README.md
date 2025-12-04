@@ -17,13 +17,13 @@ It is responsible for:
 * (Optionally) verifying correctness against a CPU reference
 * Measuring performance (latency, GFLOPs)
 
-**this file acts as the bridge between your MLIR-AIE-generated compute graph and the actual hardware execution flow.**
+**this file acts as the bridge between the MLIR-AIE-generated compute graph and the actual hardware execution flow.**
 
 ---
 
 ## **2. High-Level Execution Flow**
 
-The flow in `test.cpp` mirrors the architecture described in your report:
+The flow in `test.cpp` mirrors the architecture described in the report:
 DRAM → SHIM → L2 → L1 → AIE compute → DMA → Host buffer 
 
 ### **Step-by-step:**
@@ -91,7 +91,7 @@ DRAM → SHIM → L2 → L1 → AIE compute → DMA → Host buffer
 
 AIE does **not** return row-major matrices.
 It streams tiles *in tile order*, with **column-major storage inside each tile**, and padding between them.
-The reorder logic in `test.cpp` is the host fix for this — exactly what your debugging uncovered. 
+The reorder logic in `test.cpp` is the host fix for this — exactly what the debugging uncovered. 
 
 ### **✔ Correctly chooses tile sizes (32×64×64)**
 
@@ -99,7 +99,7 @@ Matches the AIE kernel generated in MLIR-AIE and fits local memory constraints.
 
 ### **✔ Works around 4 KB alignment constraints**
 
-Your program respects this by using the correct buffer allocation size.
+the program respects this by using the correct buffer allocation size.
 
 ### **✔ Integrates with real SIFTsmall data**
 
@@ -115,7 +115,7 @@ Includes:
 
 ### **✔ Collects consistent benchmarking results**
 
-Used in your PDF performance report.
+Used in the PDF performance report.
 
 ---
 
@@ -150,7 +150,7 @@ for (int im = 0; im < TM; im++) {
 }
 ```
 
-This implements exactly the reverse-engineering described in your report, where tile-major output needed host post-processing. 
+This implements exactly the reverse-engineering described in the report, where tile-major output needed host post-processing. 
 
 ---
 
