@@ -115,7 +115,7 @@ These shapes are chosen to match AIE hardware capabilities and SIMD widths (docu
 
 ---
 
-### **✔ Accumulator Reuse**
+### **Accumulator Reuse**
 
 Instead of recomputing C from scratch, the kernel:
 
@@ -137,11 +137,11 @@ c_row_maj (output C)
 ```
 
 Matching your documented issue:
-**Hardware stores tiles in column-major internally, but your reorder logic reconstructs row-major on host.**
+**Hardware stores tiles in column-major internally, but the reorder logic reconstructs row-major on host.**
 
 ---
 
-### **✔ Shape Validation**
+### **Shape Validation**
 
 Compile-time `static_assert` verifies:
 
@@ -177,7 +177,7 @@ Every function expands to one of the vectorized templates based on datatype and 
 ## **Why This Kernel Matters for the Project**
 
 From the architecture document:
-You chose the **32×64×64 tile size** because it was the Pareto-optimal point considering:
+We chose the **32×64×64 tile size** because it was the Pareto-optimal point considering:
 
 * AIE local memory limits
 * Vector register width
@@ -186,14 +186,6 @@ You chose the **32×64×64 tile size** because it was the Pareto-optimal point c
 * Supported shapes in `mm_32x64x64.o`
 
 This microkernel implements exactly that logic.
-
-It is the physical compute engine that makes your GEMM run at:
-
-* **2.1–3.3 GFLOPS** on hardware
-* **78×–100× faster than CPU** (benchmarked)
-
-This file **is the core of the entire accelerator**.
-
 ---
 
 ## **File Structure Summary**
