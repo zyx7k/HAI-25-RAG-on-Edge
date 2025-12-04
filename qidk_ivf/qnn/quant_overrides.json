@@ -1,0 +1,14 @@
+{
+    "inputs": {
+        "query": {
+            "data_type": "uint8"
+        }
+    },
+    "outputs": {
+        "scores": {
+            "data_type": "uint8"
+        }
+    },
+    "param_encodings": {},
+    "activation_encodings": {}
+}

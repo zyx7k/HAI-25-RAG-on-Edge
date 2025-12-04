@@ -1,0 +1,8 @@
+onnx==1.13.1
+protobuf==3.20.3
+numpy<1.24
+pyyaml==6.0
+packaging==21.3
+requests
+pandas
+scikit-learn

@@ -1,0 +1,17 @@
+{
+  "backend_extensions": {
+    "shared_library_path": "libQnnHtpNetRunExtensions.so",
+    "config_file_path": "htp_backend_extensions.config"
+  },
+  "graphs": [
+    {
+      "graph_names": ["*"],
+      "htp_options": {
+        "use_fold_relu": "true",
+        "use_multi_contexts": "true",
+        "precision": "int8",
+        "vtcm_mb": "8"
+      }
+    }
+  ]
+}
