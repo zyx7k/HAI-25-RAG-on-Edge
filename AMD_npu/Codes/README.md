@@ -84,25 +84,25 @@ DRAM → SHIM → L2 → L1 → AIE compute → DMA → Host buffer
 
 ## **3. Key Technical Highlights (What this Program Actually Solves)**
 
-### **✔ Handles the undocumented AIE DMA output format**
+### **Handles the undocumented AIE DMA output format**
 
 AIE does **not** return row-major matrices.
 It streams tiles *in tile order*, with **column-major storage inside each tile**, and padding between them.
 The reorder logic in `test.cpp` is the host fix for this — exactly what the debugging uncovered. 
 
-### **✔ Correctly chooses tile sizes (32×64×64)**
+### **Correctly chooses tile sizes (32×64×64)**
 
 Matches the AIE kernel generated in MLIR-AIE and fits local memory constraints.
 
-### **✔ Works around 4 KB alignment constraints**
+### **Works around 4 KB alignment constraints**
 
 the program respects this by using the correct buffer allocation size.
 
-### **✔ Integrates with real SIFTsmall data**
+### **Integrates with real SIFTsmall data**
 
 Reads `A.bin` and `B.bin` produced from the embedding preprocessing stage.
 
-### **✔ Provides robust runtime verification**
+### **Provides robust runtime verification**
 
 Includes:
 
@@ -110,7 +110,7 @@ Includes:
 * stochastic sample-based verification
 * tolerance handling for integer accumulation
 
-### **✔ Collects consistent benchmarking results**
+### **Collects consistent benchmarking results**
 
 Used in the PDF performance report.
 
