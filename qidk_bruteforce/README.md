@@ -146,7 +146,3 @@ adb kill-server && adb start-server  # Restart ADB
 **Build errors:**
 - Verify `ANDROID_NDK_ROOT` and `QNN_SDK_ROOT` are set correctly
 - Ensure NDK version is r25c
-
-## License
-
-MIT License
